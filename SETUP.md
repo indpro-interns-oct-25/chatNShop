@@ -29,20 +29,29 @@ cd chatNShop-1
 python -m venv venv
 
 # Activate virtual environment
-# Windows:
+# Windows (Git Bash):
+source venv/Scripts/activate
+# Windows (CMD):
 venv\Scripts\activate
+# Windows (PowerShell):
+venv\Scripts\Activate.ps1
 # Linux/Mac:
 source venv/bin/activate
 ```
 
 ### 2. Install Dependencies
 ```bash
-# Upgrade pip first
-pip install --upgrade pip
+# Upgrade pip and install build tools first
+python -m pip install --upgrade pip setuptools wheel
 
-# Install all required packages
+# Install core packages (recommended for Windows)
+pip install fastapi uvicorn[standard] pydantic python-dotenv
+
+# Install all packages (if no issues)
 pip install -r requirements.txt
 ```
+
+> **Windows Note**: If you encounter build errors, install packages individually starting with the core ones above.
 
 ### 3. Configure Environment
 ```bash
@@ -71,11 +80,18 @@ curl http://localhost:6333/collections
 
 ### 5. Run the Application
 ```bash
+# Make sure virtual environment is activated first!
+source venv/Scripts/activate  # Windows Git Bash
+# or: venv\Scripts\activate   # Windows CMD
+
 # Development mode (with auto-reload)
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Alternative if uvicorn command not found
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # Production mode
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 The API will be available at:
@@ -281,11 +297,37 @@ Once running, visit:
 
 ### Common Issues
 
-**1. Import Errors**
+**1. Virtual Environment Issues**
 ```bash
 # Ensure virtual environment is activated
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
+source venv/Scripts/activate  # Windows Git Bash
+venv\Scripts\activate         # Windows CMD
+source venv/bin/activate      # Linux/Mac
+
+# If activation fails, recreate the environment
+rm -rf venv                   # Delete old environment
+python -m venv venv           # Create new one
+```
+
+**2. Package Installation Errors**
+```bash
+# Install build tools first
+python -m pip install --upgrade pip setuptools wheel
+
+# Install packages individually if requirements.txt fails
+pip install fastapi uvicorn[standard] pydantic python-dotenv
+
+# For Windows-specific build issues
+pip install --only-binary=all <package-name>
+```
+
+**3. uvicorn Command Not Found**
+```bash
+# Use python module syntax instead
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Or check if virtual environment is activated
+which python  # Should point to venv/Scripts/python
 ```
 
 **2. Services Not Running**
@@ -336,7 +378,7 @@ docker-compose logs qdrant
 ### Debug Mode
 ```bash
 # Run with debug logging
-LOG_LEVEL=debug make run-dev
+LOG_LEVEL=debug uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ## 🤝 Contributing
@@ -344,8 +386,8 @@ LOG_LEVEL=debug make run-dev
 1. Fork the repository
 2. Create your feature branch
 3. Make changes and add tests
-4. Ensure all tests pass: `make test`
-5. Format code: `make format`
+4. Ensure all tests pass: `pytest -v`
+5. Format code: `black app/ tests/ && isort app/ tests/`
 6. Submit a pull request
 
 ## 📞 Support
@@ -378,22 +420,23 @@ cp .env.example .env  # Creates .env from .env.example
 docker-compose up -d
 
 # 5. Run the application
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Daily Development
 ```bash
 # Start your day
-docker-compose up -d                              # Start Qdrant, Redis, etc.
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000  # Start API server
+source venv/Scripts/activate                     # Activate virtual environment
+docker-compose up -d                             # Start Qdrant, Redis, etc.
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000  # Start API server
 
 # During development
-pytest -v                                         # Run tests
-black app/ tests/ && isort app/ tests/           # Format code
-flake8 app/ && mypy app/                         # Check code quality
+pytest -v                                        # Run tests
+black app/ tests/ && isort app/ tests/          # Format code
+flake8 app/ && mypy app/                        # Check code quality
 
 # End of day
-docker-compose down                               # Stop all services
+docker-compose down                              # Stop all services
 ```
 
 ### Service Management
