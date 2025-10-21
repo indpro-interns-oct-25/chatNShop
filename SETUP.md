@@ -25,7 +25,8 @@ The system uses multiple services for optimal performance:
 git clone <your-repo-url>
 cd chatNShop-1
 
-# Create virtual environment
+# Create virtual environment if python is not working
+# Use the specified version eg: python3 -m venv venv 
 python -m venv venv
 
 # Activate virtual environment
@@ -46,6 +47,10 @@ python -m pip install --upgrade pip setuptools wheel
 
 # Install core packages (recommended for Windows)
 pip install fastapi uvicorn[standard] pydantic python-dotenv
+
+# For mac 
+# Install core packages (recommended for Windows)
+pip install fastapi "uvicorn[standard]" pydantic python-dotenv
 
 # Install all packages (if no issues)
 pip install -r requirements.txt
