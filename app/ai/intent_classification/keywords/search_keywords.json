@@ -1,1 +1,6 @@
-{}
+{
+	"search_product": [
+		{ "pattern": "buy {product}", "action": "SEARCH_PRODUCT", "weight": 1.0 },
+		{ "pattern": "search for (\\w+)", "action": "SEARCH_PRODUCT_REGEX", "weight": 0.9 }
+	]
+}

@@ -1,1 +1,6 @@
-{}
+{
+	"product_info": [
+		{ "pattern": "what is the price of {product}", "action": "PRODUCT_PRICE", "weight": 1.0 },
+		{ "pattern": "price of (\\w+)", "action": "PRODUCT_PRICE_REGEX", "weight": 0.9 }
+	]
+}
