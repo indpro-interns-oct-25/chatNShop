@@ -1,4 +1,5 @@
 # 🤖 Intent Classification Backend - Setup Guide
+hellooo world
 
 A hybrid rule-based + LLM intent classification system for chatNShop.
 
@@ -19,6 +20,13 @@ The system uses multiple services for optimal performance:
 - Redis (for caching and queues)
 - PostgreSQL (for data storage)
 - Qdrant (for vector database/embeddings)
+     Python 3.10 or higher
+- pip (Python package manager)
+- Git
+- Docker & Docker Compose (for services)
+- Redis (for caching and queues)
+- PostgreSQL (for data storage)
+- Qdrant (for vector database/embeddings)   
 
 ### 1. Clone and Setup
 ```bash
