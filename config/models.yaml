@@ -1,0 +1,10 @@
+embedding:
+  provider: sentence-transformers
+  model_name: sentence-transformers/all-MiniLM-L6-v2
+  device: cpu      # "cpu" | "cuda" | "mps" | "auto"
+  batch_size: 32
+  normalize: true
+  cache_max_entries: 5000
+  intent_threshold: 0.62
+  top_k: 3
+  fallback_to_keywords: true
