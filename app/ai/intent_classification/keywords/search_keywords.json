@@ -1,6 +1,11 @@
 {
-	"search_product": [
-		{ "pattern": "buy {product}", "action": "SEARCH_PRODUCT", "weight": 1.0 },
-		{ "pattern": "search for (\\w+)", "action": "SEARCH_PRODUCT_REGEX", "weight": 0.9 }
-	]
+  "SEARCH": [
+    {"pattern": "find (.*)", "action": "SEARCH_PRODUCT", "weight": 1.0},
+    {"pattern": "look for (.*)", "action": "SEARCH_PRODUCT", "weight": 0.95},
+    {"pattern": "show me (.*)", "action": "SEARCH_PRODUCT", "weight": 0.9},
+    {"pattern": "search (.*)", "action": "SEARCH_PRODUCT", "weight": 0.85},
+    {"pattern": "i want (.*)", "action": "SEARCH_PRODUCT", "weight": 0.8},
+    {"pattern": "browse (.*)", "action": "SEARCH_PRODUCT", "weight": 0.8},
+    {"pattern": "what (.*) do you have", "action": "SEARCH_PRODUCT", "weight": 0.7}
+  ]
 }

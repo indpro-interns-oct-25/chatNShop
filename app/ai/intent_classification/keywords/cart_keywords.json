@@ -1,9 +1,19 @@
 {
-	"cart_add": [
-		{ "pattern": "add to cart", "action": "ADD_TO_CART", "weight": 1.0 },
-		{ "pattern": "add (\\w+) to cart", "action": "ADD_TO_CART_REGEX", "weight": 0.9 }
-	],
-	"cart_remove": [
-		{ "pattern": "remove from cart", "action": "REMOVE_FROM_CART", "weight": 1.0 }
-	]
+  "ADD_TO_CART": [
+    {"pattern": "add to cart", "action": "ADD_TO_CART", "weight": 1.0},
+    {"pattern": "put this in my cart", "action": "ADD_TO_CART", "weight": 0.9},
+    {"pattern": "buy this", "action": "ADD_TO_CART", "weight": 0.85},
+    {"pattern": "order this", "action": "ADD_TO_CART", "weight": 0.85},
+    {"pattern": "i want to purchase", "action": "ADD_TO_CART", "weight": 0.8}
+  ],
+  "REMOVE_FROM_CART": [
+    {"pattern": "remove from cart", "action": "REMOVE_FROM_CART", "weight": 1.0},
+    {"pattern": "delete from cart", "action": "REMOVE_FROM_CART", "weight": 0.9},
+    {"pattern": "take out", "action": "REMOVE_FROM_CART", "weight": 0.8}
+  ],
+  "VIEW_CART": [
+    {"pattern": "show cart", "action": "VIEW_CART", "weight": 1.0},
+    {"pattern": "view my cart", "action": "VIEW_CART", "weight": 0.95},
+    {"pattern": "what's in my cart", "action": "VIEW_CART", "weight": 0.9}
+  ]
 }
