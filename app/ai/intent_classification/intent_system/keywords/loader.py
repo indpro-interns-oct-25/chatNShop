@@ -59,7 +59,7 @@ class KeywordLoader:
             "compare_products": ("product_intent_keywords", "product_comparison"),
             
             # Cart intents
-            "add_to_cart": ("cart_intent_keywords", "add_to_cart"),
+            "add_to_cart": ("cart_intent_,keywords", "add_to_cart"),
             "remove_from_cart": ("cart_intent_keywords", "remove_from_cart"),
             "update_cart": ("cart_intent_keywords", "update_cart"),
             "view_cart": ("cart_intent_keywords", "view_cart"),
@@ -211,6 +211,75 @@ class KeywordLoader:
             "average_keywords_per_category": total_keywords / len(categories) if categories else 0
         }
     
+    def get_all_intent_keywords(self) -> Dict[str, Dict[str, Any]]:
+        """Get all intent keywords organized by intent name."""
+        all_intents = {}
+        
+        # Map all intents from the loaded keywords
+        intent_mapping = {
+            # Search intents
+            "search_products": ("search_intent_keywords", "search_products"),
+            "search_by_category": ("search_intent_keywords", "search_by_category"),
+            "browse_products": ("search_intent_keywords", "browse_products"),
+            "filter_products": ("search_intent_keywords", "filter_products"),
+            "sort_products": ("search_intent_keywords", "sort_products"),
+            
+            # Product intents
+            "get_product_info": ("product_intent_keywords", "product_info"),
+            "compare_products": ("product_intent_keywords", "product_comparison"),
+            
+            # Cart intents
+            "add_to_cart": ("cart_intent_keywords", "add_to_cart"),
+            "remove_from_cart": ("cart_intent_keywords", "remove_from_cart"),
+            "update_cart": ("cart_intent_keywords", "update_cart"),
+            "view_cart": ("cart_intent_keywords", "view_cart"),
+            "clear_cart": ("cart_intent_keywords", "clear_cart"),
+            
+            # Checkout intents
+            "checkout": ("checkout_intent_keywords", "checkout"),
+            "apply_coupon": ("checkout_intent_keywords", "apply_coupon"),
+            "remove_coupon": ("checkout_intent_keywords", "remove_coupon"),
+            "select_payment": ("checkout_intent_keywords", "select_payment"),
+            "select_shipping": ("checkout_intent_keywords", "select_shipping"),
+            
+            # Account intents
+            "login": ("account_intent_keywords", "login"),
+            "logout": ("account_intent_keywords", "logout"),
+            "register": ("account_intent_keywords", "register"),
+            "view_profile": ("account_intent_keywords", "view_profile"),
+            "update_profile": ("account_intent_keywords", "update_profile"),
+            "view_orders": ("account_intent_keywords", "view_orders"),
+            "track_order": ("account_intent_keywords", "track_order"),
+            
+            # Support intents
+            "faq": ("support_intent_keywords", "faq"),
+            "contact_support": ("support_intent_keywords", "contact_support"),
+            "complaint": ("support_intent_keywords", "complaint"),
+            "return_item": ("support_intent_keywords", "return_item"),
+            "refund": ("support_intent_keywords", "refund"),
+            
+            # Recommendation intents
+            "get_recommendations": ("recommendation_intent_keywords", "get_recommendations"),
+            "add_to_wishlist": ("recommendation_intent_keywords", "add_to_wishlist"),
+            "remove_from_wishlist": ("recommendation_intent_keywords", "remove_from_wishlist"),
+            "view_wishlist": ("recommendation_intent_keywords", "view_wishlist"),
+            
+            # General intents
+            "greeting": ("general_intent_keywords", "greeting"),
+            "goodbye": ("general_intent_keywords", "goodbye"),
+            "thanks": ("general_intent_keywords", "thanks"),
+            "clarification": ("general_intent_keywords", "clarification"),
+            "unknown": ("general_intent_keywords", "unknown")
+        }
+        
+        for intent_name, (category, section) in intent_mapping.items():
+            if category in self._loaded_keywords:
+                category_data = self._loaded_keywords[category]
+                if section in category_data:
+                    all_intents[intent_name] = category_data[section]
+        
+        return all_intents
+
     def export_keywords(self, format: str = "dict") -> Any:
         """Export all keywords in various formats."""
         if format == "dict":

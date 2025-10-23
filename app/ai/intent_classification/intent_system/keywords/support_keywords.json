@@ -2,7 +2,7 @@
   "support_intent_keywords": {
     "faq": {
       "primary_keywords": [
-        "faq", "frequently asked", "questions", "help", "how", "what", "why", "when", "where", "guide"
+        "faq", "frequently asked", "questions", "guide", "information", "details", "explanation"
       ],
       "question_starters": [
         "how do I", "what is", "why does", "when will", "where can", "can I", "is it possible", "do you", "are you", "will you"
@@ -32,13 +32,10 @@
         "faq": 1.0,
         "frequently asked": 0.9,
         "questions": 0.8,
-        "help": 0.7,
-        "how": 0.6,
-        "what": 0.5,
-        "why": 0.4,
-        "when": 0.3,
-        "where": 0.2,
-        "guide": 0.1
+        "guide": 0.7,
+        "information": 0.6,
+        "details": 0.5,
+        "explanation": 0.4
       }
     },
     "contact_support": {
