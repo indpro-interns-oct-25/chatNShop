@@ -142,3 +142,9 @@ def run():
 
 if __name__ == "__main__":
     run()
+
+from app.ai.intent_classification.embedding_matcher import EmbeddingMatcher
+
+matcher = EmbeddingMatcher(intent_file_path="app/ai/intent_classification/intents.json")
+result = matcher.match_intent("I want to buy new shoes")
+print(result)
