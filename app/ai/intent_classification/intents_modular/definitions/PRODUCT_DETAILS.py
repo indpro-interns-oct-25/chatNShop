@@ -365,7 +365,7 @@ product_details_intent_definitions = {
 
     "compare_feature": IntentDefinition(
         category=IntentCategory.PRODUCT_DETAILS,
-        action_code=ActionCode.COMPARE_FEATURE,
+        action_code=ActionCode.PRODUCT_COMPARISON,
         description="User wants to compare specific features of products",
         example_phrases=[
             "Compare features",
