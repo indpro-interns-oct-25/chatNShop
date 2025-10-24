@@ -14,3 +14,31 @@ services:
       QDRANT__STORAGE__STORAGE_PATH: /qdrant/storage
       QDRANT__SERVICE__GRPC_PORT: 6334
       QDRANT__SERVICE__API_KEY: qdrant-secret-key
+
+  # 🗄️ PostgreSQL - Main Database
+  postgres:
+    image: postgres:15
+    container_name: intent_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: viveka123
+      POSTGRES_DB: intent_classification_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # ⚡ Redis - Cache / Queue
+  redis:
+    image: redis:7
+    container_name: intent_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:

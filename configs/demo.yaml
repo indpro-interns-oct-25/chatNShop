@@ -1,0 +1,10 @@
+name: DemoConfig
+variants:
+  a: 70
+  b: 30
+variants_data:
+  a:
+    feature_enabled: true
+  b:
+    feature_enabled: false
+version: 1
