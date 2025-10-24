@@ -1,3 +1,0 @@
-"""Entities schema placeholder"""
-
-ENTITIES = {}
