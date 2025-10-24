@@ -1,1 +1,13 @@
-{}
+{
+  "PRODUCT_INFO": [
+    {"pattern": "details of (.*)", "action": "PRODUCT_INFO", "weight": 1.0},
+    {"pattern": "tell me about (.*)", "action": "PRODUCT_INFO", "weight": 0.9},
+    {"pattern": "show specs of (.*)", "action": "PRODUCT_INFO", "weight": 0.9},
+    {"pattern": "is (.*) available", "action": "PRODUCT_INFO", "weight": 0.8},
+    {"pattern": "how much is (.*)", "action": "PRODUCT_INFO", "weight": 0.85}
+  ],
+  "COMPARE_PRODUCTS": [
+    {"pattern": "compare (.*) and (.*)", "action": "COMPARE_PRODUCTS", "weight": 1.0},
+    {"pattern": "difference between (.*) and (.*)", "action": "COMPARE_PRODUCTS", "weight": 0.9}
+  ]
+}
