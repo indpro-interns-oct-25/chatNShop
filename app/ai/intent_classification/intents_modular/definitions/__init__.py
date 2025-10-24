@@ -10,6 +10,10 @@ from .SUPPORT_HELP import support_help_intent_definitions
 from .PROMOTIONS_LOYALTY import promotions_loyalty_intent_definitions
 from .RETURNS_REFUNDS import returns_refunds_intent_definitions
 from .REVIEWS_RATINGS import reviews_ratings_intent_definitions
+from .NOTIFICATIONS_SUBSCRIPTIONS import notifications_subscriptions_intent_definitions
+from .ANALYTICS_TRACKING import analytics_tracking_intent_definitions
+from .PERSONALIZATION import personalization_intent_definitions
+from .SECURITY_FRAUD import security_fraud_intent_definitions
 
 # Merge all intent definitions into a single dictionary
 ALL_INTENT_DEFINITIONS = {
@@ -23,6 +27,10 @@ ALL_INTENT_DEFINITIONS = {
     **promotions_loyalty_intent_definitions,
     **returns_refunds_intent_definitions,
     **reviews_ratings_intent_definitions,
+    **notifications_subscriptions_intent_definitions,
+    **analytics_tracking_intent_definitions,
+    **personalization_intent_definitions,
+    **security_fraud_intent_definitions,
 }
 
 __all__ = [
@@ -37,4 +45,8 @@ __all__ = [
     "promotions_loyalty_intent_definitions",
     "returns_refunds_intent_definitions",
     "reviews_ratings_intent_definitions",
+    "notifications_subscriptions_intent_definitions",
+    "analytics_tracking_intent_definitions",
+    "personalization_intent_definitions",
+    "security_fraud_intent_definitions",
 ]

@@ -765,4 +765,46 @@ search_discovery_intent_definitions = {
         confidence_threshold=0.75,
         priority=IntentPriority.LOW
     ),
+
+    "search_material": IntentDefinition(
+        category=IntentCategory.SEARCH_DISCOVERY,
+        action_code=ActionCode.SEARCH_MATERIAL,
+        description="User wants to find products made of specific materials",
+        example_phrases=[
+            "Show me cotton shirts",
+            "Find leather shoes",
+            "Search for wooden furniture",
+            "Products made of steel",
+            "Silk dresses",
+            "Plastic containers",
+            "Metal tools",
+            "Glass products",
+            "Ceramic items",
+            "Fabric materials"
+        ],
+        required_entities=[EntityType.MATERIAL],
+        optional_entities=[EntityType.CATEGORY, EntityType.BRAND],
+        confidence_threshold=0.80,
+        priority=IntentPriority.MEDIUM
+    ),
+
+    "sort_relevance": IntentDefinition(
+        category=IntentCategory.SEARCH_DISCOVERY,
+        action_code=ActionCode.SORT_RELEVANCE,
+        description="User wants to sort search results by relevance",
+        example_phrases=[
+            "Sort by relevance",
+            "Most relevant first",
+            "Show most relevant results",
+            "Order by relevance",
+            "Best matches first",
+            "Most relevant items",
+            "Sort by best match",
+            "Relevance order"
+        ],
+        required_entities=[],
+        optional_entities=[],
+        confidence_threshold=0.75,
+        priority=IntentPriority.MEDIUM
+    ),
 }
