@@ -1,1 +1,65 @@
-{}
+{
+  "PRODUCT_INFO": {
+    "priority": 1,
+    "keywords": [
+      "product info", "product information", "details", "specifications", "features",
+      "product details", "tell me about", "description", "product page", "info",
+      "what is this", "learn about", "product overview", "specs", "technical details",
+      "overview", "product summary", "key features", "product description page",
+      "item overview", "full product info", "product guide", "item info", "show product info",
+      "details info", "information about product", "product facts", "product content", "all about product"
+    ]
+  },
+  "PRODUCT_DETAILS": {
+    "priority": 2,
+    "keywords": [
+      "product details", "item details", "full info", "show details", "complete product info",
+      "product description", "features list", "details page", "item info", "product specs",
+      "full product details", "technical info", "specifications page", "product attributes",
+      "product characteristics", "item description", "detailed info", "product info page",
+      "feature details", "detailed specs", "product summary page", "extended product info",
+      "product information details", "comprehensive product info", "item features", "detailed product data", "complete specs", "product overview details", "all product info"
+    ]
+  },
+  "PRODUCT_AVAILABILITY": {
+    "priority": 3,
+    "keywords": [
+      "availability", "in stock", "out of stock", "is it available", "check stock",
+      "stock info", "available now", "product availability", "currently available", "stock status",
+      "item availability", "availability check", "availability info", "is it in stock",
+      "available items", "product in stock", "stock level", "check availability", "inventory info",
+      "item stock status", "currently out of stock", "availability update", "see if available",
+      "availability report", "item inventory", "product ready", "stock check info", "availability alert", "available quantity"
+    ]
+  },
+  "PRODUCT_PRICE": {
+    "priority": 4,
+    "keywords": [
+      "price", "cost", "product price", "how much", "pricing", "item price", "check price",
+      "price info", "price details", "price range", "current price", "price tag", "cost info",
+      "price check", "discounted price", "sale price", "product cost", "item cost", "pricing details",
+      "pricing info", "compare price", "price lookup", "price query", "item pricing", "retail price",
+      "offer price", "special price", "actual price", "price options", "price data"
+    ]
+  },
+  "PRODUCT_VARIANTS": {
+    "priority": 5,
+    "keywords": [
+      "variants", "options", "colors", "sizes", "models", "different versions", "product types",
+      "available variants", "options list", "product choices", "size options", "color options",
+      "available models", "version selection", "item variants", "different styles", "variant selection",
+      "product options", "available types", "choose variant", "variant info", "item options",
+      "variant details", "multiple versions", "product models", "available configurations", "variant availability", "color variations", "size variations", "variant choices"
+    ]
+  },
+  "PRODUCT_REVIEWS": {
+    "priority": 6,
+    "keywords": [
+      "reviews", "ratings", "customer feedback", "user reviews", "product ratings", "review info",
+      "see reviews", "feedback", "customer opinions", "product review", "product comments", "user feedback",
+      "star rating", "review page", "user ratings", "item reviews", "ratings info", "review details",
+      "customer review", "review scores", "average rating", "review summary", "rating details",
+      "product testimonials", "opinions", "product experience", "item rating", "read reviews", "review content", "review insights"
+    ]
+  }
+}

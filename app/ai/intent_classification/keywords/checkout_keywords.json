@@ -1,0 +1,74 @@
+{
+  "CHECKOUT_INITIATE": {
+    "priority": 1,
+    "keywords": [
+      "checkout", "start checkout", "begin checkout", "proceed to checkout", "go to checkout",
+      "start payment", "checkout process", "initiate checkout", "begin payment", "proceed to payment",
+      "place order", "start order process", "begin order", "go to payment", "checkout items",
+      "proceed to buy", "start purchasing", "begin transaction", "start order", "checkout page",
+      "confirm checkout", "payment page", "initiate order", "purchase items", "start checkout process"
+    ]
+  },
+  "CHECKOUT_CONFIRM": {
+    "priority": 2,
+    "keywords": [
+      "confirm checkout", "confirm order", "finalize checkout", "complete order", "place order",
+      "confirm purchase", "checkout confirmation", "finish checkout", "approve order", "confirm items",
+      "submit order", "finalize purchase", "complete checkout", "order confirmation", "checkout submit",
+      "approve checkout", "confirm payment", "checkout done", "finish order", "complete transaction",
+      "place final order", "order submission", "confirm buying", "confirm my order", "complete payment"
+    ]
+  },
+  "ADD_NEW_ADDRESS": {
+    "priority": 3,
+    "keywords": [
+      "add new address", "enter address", "add shipping address", "new delivery address",
+      "update address", "set address", "add billing address", "add location", "add contact address",
+      "add home address", "add office address", "save new address", "add address info", "input new address",
+      "add recipient address", "register address", "add delivery info", "add address details", "enter shipping info",
+      "add address record", "add postal address", "insert address", "add location info", "add to address book", "add address now"
+    ]
+  },
+  "UPDATE_ADDRESS": {
+    "priority": 4,
+    "keywords": [
+      "update address", "edit address", "modify address", "change shipping address",
+      "change billing address", "update delivery info", "update location", "edit address info",
+      "change address details", "update postal address", "update home address", "edit recipient address",
+      "update office address", "modify delivery address", "change location", "adjust address", "update contact info",
+      "change address record", "edit saved address", "update my address", "update delivery details",
+      "edit shipping info", "update customer address", "change address info", "update location info"
+    ]
+  },
+  "CHANGE_ADDRESS": {
+    "priority": 5,
+    "keywords": [
+      "change address", "switch address", "select different address", "use another address",
+      "update address", "choose new address", "change shipping", "change billing", "switch delivery address",
+      "change location", "update delivery address", "modify address", "change home address", "change office address",
+      "select another address", "switch billing address", "change saved address", "change address details",
+      "change recipient address", "change contact info", "change delivery info", "alter address", "change delivery location",
+      "update address choice", "switch shipping address"
+    ]
+  },
+  "PAYMENT_OPTIONS": {
+    "priority": 6,
+    "keywords": [
+      "payment options", "choose payment method", "select payment", "payment methods",
+      "checkout payment", "pay now", "payment type", "credit card", "debit card", "net banking",
+      "UPI payment", "wallet payment", "cash on delivery", "select card", "choose payment mode",
+      "payment choices", "payment selection", "payment methods list", "available payment methods", "pay with card",
+      "pay using wallet", "checkout payment options", "select payment option", "choose how to pay", "pay online"
+    ]
+  },
+  "CHANGE_PAYMENT_METHOD": {
+    "priority": 7,
+    "keywords": [
+      "change payment method", "switch payment", "update payment", "choose another payment method",
+      "select different payment", "change card", "switch payment type", "change payment option", "update payment info",
+      "change checkout payment", "modify payment", "change billing method", "switch credit card", "switch debit card",
+      "change UPI method", "alter payment method", "update payment method", "change COD option", "change payment selection",
+      "update payment choice", "change online payment", "switch payment mode", "modify checkout payment", "change how to pay"
+    ]
+  }
+}

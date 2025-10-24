@@ -1,0 +1,52 @@
+{
+  "CONTACT_SUPPORT": {
+    "priority": 1,
+    "keywords": [
+      "contact support", "customer support", "help desk", "reach support", "get help",
+      "support contact", "call support", "email support", "live chat support", "talk to support",
+      "connect to support", "contact helpdesk", "support assistance", "help center", "reach customer service",
+      "support request", "contact help", "open support ticket", "contact service", "help request",
+      "customer care", "support hotline", "contact agent", "speak with support", "get assistance"
+    ]
+  },
+  "HELP_GENERAL": {
+    "priority": 2,
+    "keywords": [
+      "help", "need help", "assistance", "support", "guidance",
+      "help me", "general help", "info", "customer assistance", "user help",
+      "instructions", "help center", "help page", "guidelines", "how to",
+      "troubleshooting", "help request", "support info", "learn how", "help documentation",
+      "support guide", "help portal", "user assistance", "general guidance", "help topics"
+    ]
+  },
+  "REPORT_ISSUE": {
+    "priority": 3,
+    "keywords": [
+      "report issue", "report problem", "file complaint", "submit issue", "report bug",
+      "report error", "problem report", "issue report", "notify support", "report incident",
+      "log issue", "report technical problem", "report malfunction", "complaint", "report service issue",
+      "raise issue", "submit complaint", "report problem now", "report account issue", "report system error",
+      "issue submission", "report issue online", "report problem report", "report website issue", "report error online"
+    ]
+  },
+  "FAQ_SHIPPING": {
+    "priority": 4,
+    "keywords": [
+      "shipping FAQ", "delivery questions", "shipping info", "frequently asked questions shipping", "delivery help",
+      "shipping guide", "shipping policies", "shipping support", "delivery FAQ", "shipping instructions",
+      "shipping questions", "delivery info", "frequently asked shipping", "shipping help", "delivery policies",
+      "delivery guidelines", "shipping instructions guide", "shipping query", "shipping answers", "delivery FAQ page",
+      "shipping info page", "shipping support page", "delivery FAQ section", "frequent delivery questions", "delivery info help"
+    ]
+  },
+  "FAQ_PAYMENT": {
+    "priority": 5,
+    "keywords": [
+      "payment FAQ", "payment questions", "payment info", "frequently asked payment questions", "billing help",
+      "payment guide", "billing FAQ", "payment support", "payment instructions", "payment policies",
+      "payment query", "billing questions", "billing info", "payment help page", "billing guidelines",
+      "payment answers", "frequent payment questions", "payment info section", "payment FAQ page", "billing instructions",
+      "payment FAQ guide", "payment help section", "billing help page", "frequently asked billing questions", "billing support"
+    ]
+  }
+}

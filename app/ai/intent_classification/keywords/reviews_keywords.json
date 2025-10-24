@@ -1,0 +1,37 @@
+{
+  "ADD_REVIEW": {
+    "priority": 1,
+    "keywords": ["add review", "write review", "submit review", "give feedback", "leave review",
+                 "post review", "write feedback", "share review", "add product review", "review product",
+                 "review item", "submit feedback", "provide review", "write customer review", "add rating",
+                 "post feedback", "share feedback", "leave feedback", "review submission", "add your review"]
+  },
+  "VIEW_REVIEWS": {
+    "priority": 2,
+    "keywords": ["view reviews", "see reviews", "customer reviews", "read reviews", "check reviews",
+                 "product reviews", "user reviews", "review list", "feedback list", "see customer feedback",
+                 "review page", "view product reviews", "check feedback", "read customer reviews", "see user reviews",
+                 "reviews info", "view ratings", "read product reviews", "review details", "see feedback"]
+  },
+  "PRODUCT_AVERAGE_REVIEW": {
+    "priority": 3,
+    "keywords": ["average review", "product rating", "rating score", "average rating", "overall rating",
+                 "rating info", "average stars", "product review score", "review average", "average feedback",
+                 "rating summary", "average product rating", "review rating", "mean review", "overall feedback",
+                 "product rating info", "average customer rating", "star rating", "rating overview", "average score"]
+  },
+  "EDIT_REVIEW": {
+    "priority": 4,
+    "keywords": ["edit review", "update review", "modify review", "change feedback", "edit my review",
+                 "update feedback", "edit product review", "correct review", "revise review", "update rating",
+                 "edit comment", "change review", "update rating score", "amend review", "update user review",
+                 "modify feedback", "edit submission", "edit review entry", "update product review", "edit post"]
+  },
+  "DELETE_REVIEW": {
+    "priority": 5,
+    "keywords": ["delete review", "remove review", "erase review", "delete feedback", "delete my review",
+                 "remove feedback", "delete product review", "discard review", "delete rating", "delete comment",
+                 "remove rating", "delete review entry", "delete review post", "erase feedback", "delete submission",
+                 "remove review entry", "discard feedback", "delete user review", "delete my feedback", "delete post"]
+  }
+}

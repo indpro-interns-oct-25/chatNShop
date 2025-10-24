@@ -1,1 +1,92 @@
-{}
+{
+  "SEARCH_PRODUCT": {
+    "priority": 1,
+    "keywords": [
+      "search product", "find product", "look for product", "browse product",
+      "product lookup", "product search", "serch product", "sreach product",
+      "search for item", "find item", "look-up product", "explore product",
+      "product discovery", "seek product", "scan products", "hunt for product",
+      "track product", "look through products", "search items", "display products"
+    ]
+  },
+  "SEARCH_CATEGORY": {
+    "priority": 2,
+    "keywords": [
+      "search category", "find category", "browse category", "category lookup",
+      "look for category", "serch category", "sreach category", "explore category",
+      "seek category", "scan categories", "look through categories", "display categories",
+      "category search", "check categories", "filter category", "category options",
+      "show categories", "category browsing", "search by category", "search in category"
+    ]
+  },
+  "SEARCH_BRAND": {
+    "priority": 3,
+    "keywords": [
+      "search brand", "find brand", "brand lookup", "browse brand",
+      "look for brand", "serch brand", "sreach brand", "explore brand",
+      "seek brand", "scan brands", "look through brands", "display brands",
+      "brand search", "check brands", "filter brand", "brand options",
+      "show brands", "brand browsing", "search by brand", "search in brand"
+    ]
+  },
+  "SEARCH_PRICE_RANGE": {
+    "priority": 4,
+    "keywords": [
+      "search price", "price range", "price filter", "search by price",
+      "find by price", "filter by price", "price lookup", "price check",
+      "search items by price", "price search", "look for price", "browse by price",
+      "seek items by price", "price range search", "price options", "price selection",
+      "price-based search", "check prices", "display by price", "show items by price"
+    ]
+  },
+  "FILTER_PRICE": {
+    "priority": 5,
+    "keywords": [
+      "filter price", "price filter", "set price range", "price limit",
+      "filter by price", "price criteria", "choose price range", "price slider",
+      "adjust price", "price options", "sort by price", "price selection",
+      "narrow by price", "price preferences", "show by price", "limit price",
+      "price control", "price-based filter", "filter cost", "search by price"
+    ]
+  },
+  "FILTER_RATING": {
+    "priority": 6,
+    "keywords": [
+      "filter rating", "rating filter", "set rating", "choose rating",
+      "sort by rating", "display by rating", "rating options", "filter by stars",
+      "rating slider", "check rating", "show by rating", "select rating",
+      "minimum rating", "rating-based filter", "filter reviews", "look at ratings",
+      "filter by stars", "rating preferences", "narrow by rating", "rating criteria"
+    ]
+  },
+  "FILTER_AVAILABILITY": {
+    "priority": 7,
+    "keywords": [
+      "filter availability", "in stock", "out of stock", "available products",
+      "availability filter", "check stock", "filter by availability", "stock filter",
+      "show in stock", "display available", "available items", "filter stock",
+      "stock check", "available products only", "available now", "narrow by stock",
+      "availability options", "show available", "filter inventory", "filter by stock"
+    ]
+  },
+  "SORT_PRICE": {
+    "priority": 8,
+    "keywords": [
+      "sort price", "price sort", "sort by price", "order by price",
+      "price ascending", "price descending", "sort cheapest first", "sort expensive first",
+      "sort low to high", "sort high to low", "arrange by price", "price ranking",
+      "price order", "price-based sort", "sort products by price", "price preference",
+      "sort item price", "display by price", "price sorting", "sort cost"
+    ]
+  },
+  "SORT_POPULARITY": {
+    "priority": 9,
+    "keywords": [
+      "sort popularity", "popular first", "most popular", "top selling",
+      "sort by popularity", "popularity ranking", "sort trending", "popular items",
+      "show popular", "best selling", "top rated", "sort high demand", "sort views",
+      "trending products", "popular choices", "arrange by popularity", "sort items popular",
+      "popularity sort", "top products", "popular now"
+    ]
+  }
+}
