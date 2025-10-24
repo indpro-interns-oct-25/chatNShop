@@ -8,7 +8,7 @@ their metadata, and provides various methods for classification-related operatio
 from typing import Dict, List, Optional, Any
 from .models import IntentDefinition, IntentResult, ClassificationRequest, ClassificationResponse
 from .enums import IntentCategory, ActionCode, IntentPriority
-# from .definitions import ALL_INTENT_DEFINITIONS
+from .definitions import ALL_INTENT_DEFINITIONS
 
 
 class IntentTaxonomy:
@@ -16,7 +16,7 @@ class IntentTaxonomy:
 
     def __init__(self):
         """Initialize the taxonomy with all available intent definitions."""
-        # self.intents: Dict[str, IntentDefinition] = ALL_INTENT_DEFINITIONS
+        self.intents: Dict[str, IntentDefinition] = ALL_INTENT_DEFINITIONS
         self.intent_mappings: Dict[str, str] = self._create_intent_mappings()
         self._validate_intents()
 
