@@ -51,23 +51,12 @@ def detect_intent(user_input):
         return {"action": "UNCLEAR", "possible_intents": intent_confidences}
 
     if len(high_conf_intents) > 1:
-        print("Multiple possible intents detected:")
-        for idx, (i, conf) in enumerate(high_conf_intents.items(), start=1):
-            print(f"{idx}. {i} (confidence: {conf})")
-        log_ambiguous_case(user_input, high_conf_intents)
-        choice = input("Please clarify your intent by typing the number of your choice: ").strip()
-        try:
-            choice_idx = int(choice) - 1
-            chosen_intent = list(high_conf_intents.keys())[choice_idx]
-            return {"action": chosen_intent, "confidence": high_conf_intents[chosen_intent], "all_high_conf_intents": high_conf_intents}
-        except:
-            print("Invalid choice. Using top priority intent...")
-            top_intents = list(high_conf_intents.keys())
-            for intent in INTENT_PRIORITY:
-                if intent in top_intents:
-                    final_intent = intent
-                    break
-            return {"action": final_intent, "confidence": high_conf_intents[final_intent], "all_high_conf_intents": high_conf_intents}
+        # Multiple high-confidence intents detected.
+        # Instead of interactive disambiguation here, return all candidates so
+        # upstream code can decide how to handle ambiguity (e.g., ask the user,
+        # call an LLM clarifier, or present choices). Also log the case.
+        log_ambiguous_case(user_input, {"type": "multiple", "intents": high_conf_intents})
+        return {"action": "AMBIGUOUS", "possible_intents": high_conf_intents}
 
     final_intent = list(high_conf_intents.keys())[0]
     return {"action": final_intent, "confidence": high_conf_intents[final_intent], "all_high_conf_intents": high_conf_intents}
