@@ -1,0 +1,3 @@
+"""Variant config placeholder"""
+
+VARIANTS = {}

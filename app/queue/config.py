@@ -1,0 +1,3 @@
+"""Queue config placeholder"""
+
+CONFIG = {}

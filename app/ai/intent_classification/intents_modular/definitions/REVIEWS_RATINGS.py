@@ -63,26 +63,6 @@ reviews_ratings_intent_definitions = {
         priority=IntentPriority.MEDIUM
     ),
 
-    "flag_review": IntentDefinition(
-        category=IntentCategory.REVIEWS_RATINGS,
-        action_code=ActionCode.FLAG_REVIEW,
-        description="User wants to flag an inappropriate review",
-        example_phrases=[
-            "Flag this review",
-            "Report this review",
-            "Flag inappropriate review",
-            "Report review",
-            "Flag review",
-            "Report this rating",
-            "Flag this comment",
-            "Report inappropriate"
-        ],
-        required_entities=[EntityType.PRODUCT_ID],
-        optional_entities=[EntityType.REASON],
-        confidence_threshold=0.85,
-        priority=IntentPriority.MEDIUM
-    ),
-
     "view_reviews": IntentDefinition(
         category=IntentCategory.REVIEWS_RATINGS,
         action_code=ActionCode.VIEW_REVIEWS,
@@ -101,26 +81,6 @@ reviews_ratings_intent_definitions = {
         optional_entities=[],
         confidence_threshold=0.85,
         priority=IntentPriority.HIGH
-    ),
-
-    "review_recommendation": IntentDefinition(
-        category=IntentCategory.REVIEWS_RATINGS,
-        action_code=ActionCode.REVIEW_RECOMMENDATION,
-        description="User wants to see review-based recommendations",
-        example_phrases=[
-            "Recommend based on reviews",
-            "What do reviews suggest?",
-            "Review recommendations",
-            "Based on reviews",
-            "What reviews recommend?",
-            "Review-based suggestions",
-            "Recommend from reviews",
-            "Review insights"
-        ],
-        required_entities=[EntityType.PRODUCT_ID],
-        optional_entities=[],
-        confidence_threshold=0.80,
-        priority=IntentPriority.MEDIUM
     ),
 
     "product_average_review": IntentDefinition(
