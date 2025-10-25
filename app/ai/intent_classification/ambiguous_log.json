@@ -1,0 +1,28 @@
+[
+    {
+        "user_input": "put and checkout",
+        "intent_scores": {
+            "ADD_TO_CART": 0.33,
+            "CHECKOUT": 0.33
+        }
+    },
+    {
+        "user_input": "add and view the dress",
+        "intent_scores": {
+            "ADD_TO_CART": 0.4,
+            "VIEW_CART": 0.2
+        }
+    },
+    {
+        "user_input": "please show my cart",
+        "intent_scores": {}
+    },
+    {
+        "user_input": "add my short to cart",
+        "intent_scores": {}
+    },
+    {
+        "user_input": "add to cart",
+        "intent_scores": {}
+    }
+]
