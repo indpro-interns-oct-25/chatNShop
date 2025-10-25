@@ -4,10 +4,17 @@ Intent Classification API - Main Application Entry Point
 This is the main FastAPI application that serves as the entry point for the
 hybrid rule-based + LLM intent classification backend.
 """
+import sys, os, time, json
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app.config.config_manager import load_all_configs, start_config_watcher
+
+# Load and watch configurations
+load_all_configs()
+print("✅ Configuration Management System initialized.\n")
 
 from contextlib import asynccontextmanager
 from typing import Dict, Any
-import os
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, Request
@@ -15,15 +22,35 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 
+
+# ✅ Patch: Add debounce + JSON validation for config reload
+import threading
+
+_last_reload_time = 0
+_reload_lock = threading.Lock()
+
+
+def safe_reload_configs(path: str):
+    global _last_reload_time
+    with _reload_lock:
+        now = time.time()
+        if now - _last_reload_time < 1:
+            return
+        _last_reload_time = now
+        print(f"🔁 Config reloaded due to change: {path}")
+        try:
+            load_all_configs()
+        except json.JSONDecodeError as e:
+            print(f"⚠️ Skipping invalid JSON file {os.path.basename(path)}: {e}")
+
+
+# Monkey-patch watcher callback (no other edits needed)
+import app.config.config_manager as config_manager
+config_manager.safe_reload_configs = safe_reload_configs
+
+
 # Load environment variables
 load_dotenv()
-
-# Import routers (these will be created later)
-# from app.api.v1 import intent, feedback, analytics, experiments
-
-# Import monitoring and logging
-# from app.monitoring.metrics import setup_metrics
-# from app.core.config_manager import get_settings
 
 
 @asynccontextmanager
@@ -32,31 +59,14 @@ async def lifespan(app: FastAPI):
     Application lifespan context manager.
     Handles startup and shutdown events.
     """
-    # Startup
     print("🚀 Starting Intent Classification API...")
-    
-    # Initialize database connections
-    # await init_database()
-    
-    # Initialize Redis connection
-    # await init_redis()
-    
-    # Setup monitoring
-    # setup_metrics()
-    
+
+    # ✅ Start watcher (now safe + debounced)
+    start_config_watcher()
+
     print("✅ Intent Classification API started successfully!")
-    
     yield
-    
-    # Shutdown
     print("🛑 Shutting down Intent Classification API...")
-    
-    # Close database connections
-    # await close_database()
-    
-    # Close Redis connection
-    # await close_redis()
-    
     print("✅ Intent Classification API shut down successfully!")
 
 
@@ -80,7 +90,6 @@ app.add_middleware(
 )
 
 
-# Health check endpoints
 @app.get("/", tags=["Health"])
 async def root() -> Dict[str, Any]:
     """Root endpoint - API health check."""
@@ -97,24 +106,16 @@ async def health_check() -> Dict[str, Any]:
     """Detailed health check endpoint."""
     return {
         "status": "healthy",
-        "timestamp": "2024-01-01T00:00:00Z",  # This would be dynamic
+        "timestamp": "2024-01-01T00:00:00Z",
         "services": {
-            "database": "connected",  # This would be dynamic
-            "redis": "connected",     # This would be dynamic
-            "openai": "available"     # This would be dynamic
+            "database": "connected",
+            "redis": "connected",
+            "openai": "available"
         },
         "version": os.getenv("APP_VERSION", "1.0.0")
     }
 
 
-# Include API routers (uncomment when routers are created)
-# app.include_router(intent.router, prefix="/api/v1/intent", tags=["Intent Classification"])
-# app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"])
-# app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
-# app.include_router(experiments.router, prefix="/api/v1/experiments", tags=["Experiments"])
-
-
-# Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler for unhandled errors."""
@@ -132,9 +133,9 @@ def run():
     """Run the application with uvicorn."""
     uvicorn.run(
         "app.main:app",
-        host=os.getenv("HOST", "0.0.0.0"),
+        host=os.getenv("HOST", "127.0.0.1"),
         port=int(os.getenv("PORT", 8000)),
-        reload=os.getenv("RELOAD", "true").lower() == "true",
+        reload=False,
         workers=int(os.getenv("WORKERS", 1)),
         log_level=os.getenv("LOG_LEVEL", "info").lower()
     )
