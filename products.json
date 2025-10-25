@@ -1,0 +1,37 @@
+[
+  {
+    "name": "Classic Cotton T-Shirt",
+    "description": "A comfortable, 100% cotton t-shirt. Perfect for casual wear. Available in white, black, and blue.",
+    "price": 24.99,
+    "category": "Apparel",
+    "image_url": "http://example.com/images/tshirt.png"
+  },
+  {
+    "name": "Men's Leather Wallet",
+    "description": "A stylish and durable genuine leather wallet with six card slots and a cash compartment.",
+    "price": 49.50,
+    "category": "Accessories",
+    "image_url": "http://example.com/images/wallet.png"
+  },
+  {
+    "name": "Wireless Bluetooth Headphones",
+    "description": "Over-ear noise-cancelling headphones with 30-hour battery life. Deep bass and crystal-clear audio.",
+    "price": 149.99,
+    "category": "Electronics",
+    "image_url": "http://example.com/images/headphones.png"
+  },
+  {
+    "name": "Women's Running Shoes",
+    "description": "Lightweight and breathable sneakers designed for road running. Excellent cushioning and support.",
+    "price": 89.95,
+    "category": "Footwear",
+    "image_url": "http://example.com/images/shoes.png"
+  },
+  {
+    "name": "Insulated Coffee Mug",
+    "description": "A 16oz stainless steel travel mug that keeps your drinks hot for 6 hours or cold for 12 hours.",
+    "price": 19.99,
+    "category": "Homeware",
+    "image_url": "http://example.com/images/mug.png"
+  }
+]
