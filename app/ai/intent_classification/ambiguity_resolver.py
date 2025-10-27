@@ -1,11 +1,34 @@
+"""
+Ambiguity Resolver for Intent Classification (CNS-12)
+
+Handles ambiguous and multi-intent user queries by:
+1. Detecting when user input matches multiple intents (AMBIGUOUS)
+2. Detecting when user input has low confidence (UNCLEAR)
+3. Logging ambiguous cases for analysis
+4. Providing fallback behavior
+
+Dependencies:
+- CNS-7: Uses intent definitions from intents_modular.taxonomy  
+- CNS-8: Uses comprehensive keyword dictionaries (✅ Integrated)
+
+Confidence Thresholds:
+- UNCLEAR_THRESHOLD (0.4): Below this = unclear intent
+- MIN_CONFIDENCE (0.6): Above this = valid intent
+- AMBIGUOUS: Multiple intents above MIN_CONFIDENCE
+"""
+
 import os
 import json
 
-# ✅ Import the keyword loader from the keywords folder
+# ✅ Import the keyword loader from CNS-8
 from keywords.loader import load_keywords
 
 # ------------------ CONFIGURATION ------------------
-MIN_CONFIDENCE = 0.6
+# Standardized confidence thresholds (addresses reviewer feedback)
+UNCLEAR_THRESHOLD = 0.4  # Below this = UNCLEAR (low confidence)
+MIN_CONFIDENCE = 0.6     # Above this = Valid intent (medium-high confidence)
+AMBIGUOUS_THRESHOLD = MIN_CONFIDENCE  # Multiple intents above this = AMBIGUOUS
+
 LOG_FILE = "ambiguous_log.json"
 
 # ------------------ LOAD KEYWORDS ------------------
@@ -58,7 +81,20 @@ def fallback_behavior(user_input):
 
 
 def detect_intent(user_input):
-    """Detect the most likely intent based on keyword matching."""
+    """
+    Detect user intent with ambiguity resolution.
+    
+    Uses standardized confidence thresholds:
+    - < 0.4 (UNCLEAR_THRESHOLD): Returns UNCLEAR
+    - >= 0.6 (MIN_CONFIDENCE): Valid intent
+    - Multiple >= 0.6: Returns AMBIGUOUS
+    
+    Returns:
+        dict: Contains action, confidence, and possible_intents
+        - action: "UNCLEAR", "AMBIGUOUS", or specific intent code
+        - confidence: confidence score (if single intent)
+        - possible_intents: all detected intents with scores
+    """
     user_words = user_input.lower().split()
     intent_confidences = {}
 
@@ -68,22 +104,22 @@ def detect_intent(user_input):
         if confidence > 0:
             intent_confidences[intent] = round(confidence, 2)
 
-    # Filter only high-confidence intents
+    # Filter only high-confidence intents (>= MIN_CONFIDENCE)
     high_conf_intents = {
         intent: conf for intent, conf in intent_confidences.items()
         if conf >= MIN_CONFIDENCE
     }
 
-    # If no confident intent found → log & fallback
+    # Case 1: No high-confidence intents (< MIN_CONFIDENCE) → UNCLEAR
     if not high_conf_intents:
-        log_ambiguous_case(user_input, intent_confidences)
+        log_ambiguous_case(user_input, {"type": "unclear", "intents": intent_confidences})
         fallback_behavior(user_input)
         return {
             "action": "UNCLEAR",
             "possible_intents": intent_confidences
         }
 
-    # If multiple high-confidence intents → log & return all
+    # Case 2: Multiple high-confidence intents (>= MIN_CONFIDENCE) → AMBIGUOUS
     if len(high_conf_intents) > 1:
         log_ambiguous_case(user_input, {"type": "multiple", "intents": high_conf_intents})
         return {
@@ -91,7 +127,7 @@ def detect_intent(user_input):
             "possible_intents": high_conf_intents
         }
 
-    # Single clear intent → return that
+    # Case 3: Single clear intent → Return it
     final_intent = list(high_conf_intents.keys())[0]
     return {
         "action": final_intent,
