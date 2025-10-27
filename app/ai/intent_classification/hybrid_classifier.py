@@ -30,7 +30,7 @@ class HybridClassifier:
     7.  If neither method can determine an intent, a fallback response is returned.
     """
 
-    def __init__(self):
+    def _init_(self):
         """Initializes the hybrid classifier with its constituent matchers."""
         self.keyword_matcher = KeywordMatcher()
         self.embedding_matcher = EmbeddingMatcher()
@@ -112,20 +112,3 @@ class HybridClassifier:
         logging.info(f"Combined scoring result. Best intent: {best_intent} with score: {final_score:.4f}")
         
         return {'intent': best_intent, 'confidence_score': float(f"{final_score:.4f}")}
-
-# Example of a corresponding configuration file
-# You would create a new file named `config.py` inside the `intent_classification` directory.
-#
-# # app/ai/intent_classification/config.py
-#
-# # --- Hybrid Classifier Configuration ---
-#
-# # Priority Rule: If a keyword match confidence is above this value,
-# # we will skip the embedding match entirely.
-# KEYWORD_PRIORITY_THRESHOLD = 0.90
-#
-# # Weighted Scoring: Used when both keyword and embedding methods return results
-# # below the priority threshold. These weights determine the final blended score.
-# # They do not need to sum to 1.
-# KEYWORD_WEIGHT = 1.2
-# EMBEDDING_WEIGHT = 1.0
