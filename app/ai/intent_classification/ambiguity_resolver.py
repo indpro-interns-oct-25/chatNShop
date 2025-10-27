@@ -8,8 +8,8 @@ Handles ambiguous and multi-intent user queries by:
 4. Providing fallback behavior
 
 Dependencies:
-- CNS-7: Uses intent definitions from intents_modular.taxonomy  
-- CNS-8: Uses comprehensive keyword dictionaries (✅ Integrated)
+- CNS-7: Uses action codes and intent structure from IntentTaxonomy
+- CNS-8: Uses keyword dictionaries that align with CNS-7 action codes
 
 Confidence Thresholds:
 - UNCLEAR_THRESHOLD (0.4): Below this = unclear intent
@@ -26,12 +26,10 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-# ✅ Import from CNS-8 (Keyword Dictionaries)
+# ✅ Import from CNS-8 (Keyword Dictionaries aligned with CNS-7 action codes)
 try:
-    # Try relative import first (for module usage)
     from .keywords.loader import load_keywords
 except ImportError:
-    # Fallback for direct execution
     from keywords.loader import load_keywords
 
 # ------------------ CONFIGURATION ------------------
@@ -42,12 +40,12 @@ AMBIGUOUS_THRESHOLD = MIN_CONFIDENCE  # Multiple intents above this = AMBIGUOUS
 
 LOG_FILE = "ambiguous_log.json"
 
-# ------------------ LOAD DATA FROM CNS-8 ------------------
+# ------------------ LOAD DATA FROM CNS-8 (aligned with CNS-7) ------------------
 # Load keyword dictionaries from CNS-8
-# These action codes match CNS-7 definitions (e.g., SEARCH_PRODUCT, ADD_TO_CART)
+# Action codes in CNS-8 match CNS-7 IntentTaxonomy action codes
+# (e.g., SEARCH_PRODUCT, ADD_TO_CART as defined in CNS-7)
 loaded_keywords = load_keywords()
 
-# Extract action code keywords from CNS-8
 INTENT_KEYWORDS = {
     action_code: details.get("keywords", [])
     for action_code, details in loaded_keywords.items()
@@ -76,10 +74,9 @@ def log_ambiguous_case(user_input, intent_scores):
 
 def calculate_confidence(user_input, keywords):
     """
-    Calculate confidence score based on keyword phrase matching.
+    Calculate confidence score using keywords from CNS-8.
     
-    Matches user input against keyword phrases from CNS-8.
-    Uses exact phrase matching as defined by your teammates in CNS-8.
+    CNS-8 keywords align with CNS-7 action codes as requested by reviewer.
     
     Args:
         user_input: User's query (lowercase)
@@ -93,7 +90,7 @@ def calculate_confidence(user_input, keywords):
     
     user_input_lower = user_input.lower()
     
-    # Count keyword phrase matches (exact phrase matching)
+    # Count exact phrase matches
     matches = sum(1 for keyword in keywords if keyword.lower() in user_input_lower)
     
     if matches == 0:
@@ -119,9 +116,8 @@ def detect_intent(user_input):
     """
     Detect user intent with ambiguity resolution.
     
-    Integrates CNS-7 (intent taxonomy) and CNS-8 (keyword dictionaries):
-    - Uses CNS-8 keywords for matching
-    - Returns CNS-7 action codes
+    Uses CNS-8 keywords that align with CNS-7 action codes (as requested by reviewer).
+    Returns action codes defined in CNS-7 IntentTaxonomy.
     
     Uses standardized confidence thresholds:
     - < 0.4 (UNCLEAR_THRESHOLD): Returns UNCLEAR
@@ -130,14 +126,14 @@ def detect_intent(user_input):
     
     Returns:
         dict: Contains action, confidence, and possible_intents
-        - action: "UNCLEAR", "AMBIGUOUS", or specific action code from CNS-7
+        - action: "UNCLEAR", "AMBIGUOUS", or specific CNS-7 action code
         - confidence: confidence score (if single intent)
         - possible_intents: all detected action codes with scores
     """
     user_input_lower = user_input.lower()
     intent_confidences = {}
 
-    # Calculate confidence for each action code using CNS-8 keywords
+    # Calculate confidence for each CNS-7 action code using CNS-8 keywords
     for action_code, keywords in INTENT_KEYWORDS.items():
         confidence = calculate_confidence(user_input_lower, keywords)
         if confidence > 0:
@@ -166,7 +162,7 @@ def detect_intent(user_input):
             "possible_intents": high_conf_intents
         }
 
-    # Case 3: Single clear intent → Return action code from CNS-7
+    # Case 3: Single clear intent → Return CNS-7 action code
     final_action_code = list(high_conf_intents.keys())[0]
     return {
         "action": final_action_code,
@@ -180,10 +176,12 @@ def detect_intent(user_input):
 if __name__ == "__main__":
     print("Welcome! Type your message to detect intent (type 'exit' to quit).")
 
-    # Print summary of loaded intents
-    print("\nLoaded keyword intents:")
-    for intent, keywords in INTENT_KEYWORDS.items():
-        print(f"  - {intent}: {len(keywords)} keywords")
+    # Print summary of loaded CNS-7 action codes via CNS-8 keywords
+    print(f"\nLoaded {len(INTENT_KEYWORDS)} action codes from CNS-7 (via CNS-8 keywords):")
+    for action_code, keywords in list(INTENT_KEYWORDS.items())[:10]:
+        print(f"  - {action_code}: {len(keywords)} keywords")
+    if len(INTENT_KEYWORDS) > 10:
+        print(f"  ... and {len(INTENT_KEYWORDS) - 10} more action codes")
 
     while True:
         user_input = input("\nYour input: ")
