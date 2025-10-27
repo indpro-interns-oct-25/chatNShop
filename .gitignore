@@ -68,6 +68,10 @@ instance/
 # Scrapy stuff:
 .scrapy
 
+
+# Qdrant local database
+qdrant_storage/
+
 # Sphinx documentation
 docs/_build/
 
