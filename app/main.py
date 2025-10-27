@@ -19,7 +19,7 @@ import uvicorn
 load_dotenv()
 
 # Import routers (these will be created later)
-# from app.api.v1 import intent, feedback, analytics, experiments
+from app.api.v1 import intent
 
 # Import monitoring and logging
 # from app.monitoring.metrics import setup_metrics
@@ -107,8 +107,9 @@ async def health_check() -> Dict[str, Any]:
     }
 
 
-# Include API routers (uncomment when routers are created)
-# app.include_router(intent.router, prefix="/api/v1/intent", tags=["Intent Classification"])
+# Include API routers
+app.include_router(intent.router)
+
 # app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"])
 # app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
 # app.include_router(experiments.router, prefix="/api/v1/experiments", tags=["Experiments"])
