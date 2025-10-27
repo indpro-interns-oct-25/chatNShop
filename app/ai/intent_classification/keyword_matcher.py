@@ -1,34 +1,40 @@
-# chatNShop/app/ai/intent_classification/keyword_matcher.py
+# app/ai/intent_classification/keyword_matcher.py
 
-# Dictionary mapping keywords to intents
-keyword_intent_map = {
-    "add to cart": "ADD_TO_CART",
-    "buy this item": "ADD_TO_CART",
-    "put product in cart": "ADD_TO_CART",
-    "view cart": "VIEW_CART",
-    "show my cart": "VIEW_CART",
-    "open basket": "VIEW_CART",
-    "checkout": "CHECKOUT",
-    "place my order": "CHECKOUT",
-    "buy now": "CHECKOUT",
-    "proceed to pay": "CHECKOUT",
-    "product info": "PRODUCT_INFO",
-    "tell me about this product": "PRODUCT_INFO",
-    "product details": "PRODUCT_INFO",
-    "more info": "PRODUCT_INFO",
-    "search": "SEARCH",
-    "find item": "SEARCH",
-    "look up product": "SEARCH",
-    "compare": "COMPARE",
+"""
+Simple keyword-based intent matcher.
+Used as fallback if embedding similarity is low.
+"""
+
+# Map keywords/phrases to intent codes
+KEYWORD_INTENT_MAP = {
+    "add to cart": "add_to_cart",
+    "buy this item": "add_to_cart",
+    "put product in cart": "add_to_cart",
+    "view cart": "view_cart",
+    "show my cart": "view_cart",
+    "open basket": "view_cart",
+    "checkout": "checkout",
+    "place my order": "checkout",
+    "buy now": "checkout",
+    "proceed to pay": "checkout",
+    "product info": "product_info",
+    "tell me about this product": "product_info",
+    "product details": "product_info",
+    "more info": "product_info",
+    "search": "search_product",
+    "find item": "search_product",
+    "look up product": "search_product",
+    "compare": "compare",
+    "difference": "compare",
 }
 
-def keyword_match(user_query):
+def match(user_query: str):
     """
-    Check if any keyword exists in the user query.
-    Returns the intent code if found, else "None".
+    Return the intent from keyword mapping if found, else None.
     """
     user_query_lower = user_query.lower()
-    for keyword, intent in keyword_intent_map.items():
+    for keyword, intent in KEYWORD_INTENT_MAP.items():
         if keyword in user_query_lower:
             return intent
-    return "None"
+    return None
+
