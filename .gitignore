@@ -205,3 +205,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# CNS-12: Ambiguity resolver log files
+ambiguous_log.json
