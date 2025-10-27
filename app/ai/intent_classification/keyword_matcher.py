@@ -1,11 +1,15 @@
 import os
 import re
 from typing import Callable, Dict, List, Tuple, Optional
-from app.ai.intent_classification.keywords.loader import load_all_keywords
+from functools import lru_cache
+from app.ai.intent_classification.keywords.loader import load_keywords
 from app.utils.text_processing import normalize_text
 
 # Directory path for keyword JSONs
 KEYWORDS_DIR = os.path.join(os.path.dirname(__file__), "keywords")
+
+# Cache for loaded keywords
+_KEYWORDS_CACHE = None
 
 
 # ------------------------- Internal scoring helpers -------------------------
@@ -37,6 +41,22 @@ def _compile_pattern(pattern: str):
         return None
 
 
+@lru_cache(maxsize=128)
+def _normalize_and_tokenize(text: str) -> Tuple[str, Tuple[str, ...]]:
+    """Cache normalized text and tokens to avoid redundant processing."""
+    normalized = normalize_text(text)
+    tokens = tuple(re.findall(r"\w+", normalized))
+    return normalized, tokens
+
+
+def _get_cached_keywords():
+    """Load keywords once and cache them."""
+    global _KEYWORDS_CACHE
+    if _KEYWORDS_CACHE is None:
+        _KEYWORDS_CACHE = load_keywords()
+    return _KEYWORDS_CACHE
+
+
 # ------------------------- Main matching function -------------------------
 
 def match_keywords(
@@ -62,39 +82,60 @@ def match_keywords(
     segments = re.split(r"\band\b|,|\.|!|\?|;", norm_text)
     segments = [seg.strip() for seg in segments if seg.strip()]
 
-    tokens = re.findall(r"\w+", norm_text)
-    token_count = len(tokens)
-
-    keywords = load_all_keywords(KEYWORDS_DIR)
+    keywords = _get_cached_keywords()
     candidates: List[Tuple[float, Dict]] = []
+    
+    # Pre-tokenize all segments once
+    seg_data = []
+    for segment in segments:
+        seg_tokens = set(re.findall(r"\w+", segment))
+        seg_data.append((segment, seg_tokens))
+
+    # Pre-tokenize all segments once
+    seg_data = []
+    for segment in segments:
+        seg_tokens = set(re.findall(r"\w+", segment))
+        seg_data.append((segment, seg_tokens))
 
     # Check each intent and its patterns
-    for segment in segments:
-        seg_tokens = re.findall(r"\w+", segment)
-        seg_token_count = len(seg_tokens)
+    for segment, seg_tokens in seg_data:
+        best_match_for_segment = None
+        best_score = 0.0
 
-        for intent, patterns in keywords.items():
-            for entry in patterns:
-                pattern = entry.get("pattern") or entry.get("keyword") or ""
-                action = entry.get("action") or entry.get("action_code") or intent
-                weight = float(entry.get("weight", 1.0))
-
-                if not pattern:
+        for intent, intent_data in keywords.items():
+            # Get priority and keywords list from the intent data
+            priority = intent_data.get("priority", 1)
+            keyword_list = intent_data.get("keywords", [])
+            weight = 1.0 / priority  # Higher priority = higher weight
+            
+            for pattern in keyword_list:
+                if not pattern or not isinstance(pattern, str):
                     continue
 
+                # Use cached normalization
+                pat_norm, pat_tokens = _normalize_and_tokenize(pattern)
+                
                 # Detect if pattern looks like a regex
                 is_regex = any(ch in pattern for ch in ("\\b", "^", "$", "(", ")", "[", "]", ".*"))
 
-                # Exact match
-                if normalize(pattern) == segment:
+                # Exact match - highest priority
+                if pat_norm == segment:
                     score = _score_exact() * weight
-                    candidates.append((score, {
+                    match_info = {
                         "intent": intent,
-                        "action": action,
+                        "action": intent,
                         "score": score,
                         "match_type": "exact",
                         "matched_text": pattern,
-                    }))
+                    }
+                    # Exact match found, add immediately and move to next segment
+                    candidates.append((score, match_info))
+                    best_match_for_segment = match_info
+                    best_score = score
+                    break  # Found exact match, no need to check other patterns
+
+                # Skip regex and partial if we already have an exact match
+                if best_match_for_segment and best_match_for_segment.get("match_type") == "exact":
                     continue
 
                 # Regex match
@@ -105,31 +146,33 @@ def match_keywords(
                         if m:
                             match_len = len(m.group(0))
                             score = _score_regex(match_len, len(pattern), weight)
+                            if score > best_score:
+                                candidates.append((score, {
+                                    "intent": intent,
+                                    "action": intent,
+                                    "score": score,
+                                    "match_type": "regex",
+                                    "matched_text": m.group(0),
+                                }))
+                    continue
+
+                # Partial/token overlap - only if tokens exist
+                if pat_tokens:
+                    overlap = len(seg_tokens & set(pat_tokens))
+                    if overlap > 0:
+                        score = _score_partial(overlap, len(pat_tokens), weight)
+                        if score > best_score * 0.5:  # Only consider if score is reasonable
                             candidates.append((score, {
                                 "intent": intent,
-                                "action": action,
+                                "action": intent,
                                 "score": score,
-                                "match_type": "regex",
-                                "matched_text": m.group(0),
+                                "match_type": "partial",
+                                "matched_text": pattern,
                             }))
-                    continue
-
-                # Partial/token overlap
-                pat_norm = normalize(pattern)
-                pat_tokens = re.findall(r"\w+", pat_norm)
-                if not pat_tokens:
-                    continue
-
-                overlap = len(set(seg_tokens) & set(pat_tokens))
-                if overlap > 0:
-                    score = _score_partial(overlap, len(pat_tokens), weight)
-                    candidates.append((score, {
-                        "intent": intent,
-                        "action": action,
-                        "score": score,
-                        "match_type": "partial",
-                        "matched_text": pattern,
-                    }))
+            
+            # If we found an exact match for this intent, break to next segment
+            if best_match_for_segment and best_match_for_segment.get("match_type") == "exact":
+                break
 
     # Sort candidates: score > match type > text length
     def sort_key(item: Tuple[float, Dict]) -> Tuple[float, int, int]:
