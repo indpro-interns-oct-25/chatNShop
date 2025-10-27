@@ -14,14 +14,25 @@ Dependencies:
 Confidence Thresholds:
 - UNCLEAR_THRESHOLD (0.4): Below this = unclear intent
 - MIN_CONFIDENCE (0.6): Above this = valid intent
-- AMBIGUOUS: Multiple intents above MIN_CONFIDENCE
+- AMBIGUOUS: Multiple intents above this = AMBIGUOUS
 """
 
 import os
 import json
+import sys
 
-# ✅ Import the keyword loader from CNS-8
-from keywords.loader import load_keywords
+# Add parent directory to path for imports when running standalone
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# ✅ Import from CNS-8 (Keyword Dictionaries)
+try:
+    # Try relative import first (for module usage)
+    from .keywords.loader import load_keywords
+except ImportError:
+    # Fallback for direct execution
+    from keywords.loader import load_keywords
 
 # ------------------ CONFIGURATION ------------------
 # Standardized confidence thresholds (addresses reviewer feedback)
@@ -31,21 +42,16 @@ AMBIGUOUS_THRESHOLD = MIN_CONFIDENCE  # Multiple intents above this = AMBIGUOUS
 
 LOG_FILE = "ambiguous_log.json"
 
-# ------------------ LOAD KEYWORDS ------------------
-# Dynamically load all keyword JSONs using the loader script
-loaded_data = load_keywords()
+# ------------------ LOAD DATA FROM CNS-8 ------------------
+# Load keyword dictionaries from CNS-8
+# These action codes match CNS-7 definitions (e.g., SEARCH_PRODUCT, ADD_TO_CART)
+loaded_keywords = load_keywords()
 
-# Extract intent keywords and priorities from loaded data
+# Extract action code keywords from CNS-8
 INTENT_KEYWORDS = {
-    intent: details.get("keywords", [])
-    for intent, details in loaded_data.items()
+    action_code: details.get("keywords", [])
+    for action_code, details in loaded_keywords.items()
 }
-
-# Sort intents based on their "priority" value (lower = higher priority)
-INTENT_PRIORITY = sorted(
-    loaded_data.keys(),
-    key=lambda intent: loaded_data[intent].get("priority", 999)
-)
 
 # ------------------ FUNCTIONS ------------------
 
@@ -68,10 +74,39 @@ def log_ambiguous_case(user_input, intent_scores):
         json.dump(data, file, indent=4)
 
 
-def calculate_confidence(user_words, keywords):
-    """Simple confidence measure: how many words match keywords."""
-    matches = sum(1 for word in user_words if word in keywords)
-    return matches / len(user_words) if user_words else 0
+def calculate_confidence(user_input, keywords):
+    """
+    Calculate confidence score based on keyword phrase matching.
+    
+    Matches user input against keyword phrases from CNS-8.
+    Uses exact phrase matching as defined by your teammates in CNS-8.
+    
+    Args:
+        user_input: User's query (lowercase)
+        keywords: List of keyword phrases for this action code
+        
+    Returns:
+        float: Confidence score (0.0 to 1.0)
+    """
+    if not keywords:
+        return 0.0
+    
+    user_input_lower = user_input.lower()
+    
+    # Count keyword phrase matches (exact phrase matching)
+    matches = sum(1 for keyword in keywords if keyword.lower() in user_input_lower)
+    
+    if matches == 0:
+        return 0.0
+    
+    # Weighted scoring: more matches = higher confidence
+    # 1 match = 0.7, 2 matches = 0.85, 3+ matches = 0.95
+    if matches == 1:
+        return 0.7
+    elif matches == 2:
+        return 0.85
+    else:
+        return 0.95
 
 
 def fallback_behavior(user_input):
@@ -84,6 +119,10 @@ def detect_intent(user_input):
     """
     Detect user intent with ambiguity resolution.
     
+    Integrates CNS-7 (intent taxonomy) and CNS-8 (keyword dictionaries):
+    - Uses CNS-8 keywords for matching
+    - Returns CNS-7 action codes
+    
     Uses standardized confidence thresholds:
     - < 0.4 (UNCLEAR_THRESHOLD): Returns UNCLEAR
     - >= 0.6 (MIN_CONFIDENCE): Valid intent
@@ -91,26 +130,26 @@ def detect_intent(user_input):
     
     Returns:
         dict: Contains action, confidence, and possible_intents
-        - action: "UNCLEAR", "AMBIGUOUS", or specific intent code
+        - action: "UNCLEAR", "AMBIGUOUS", or specific action code from CNS-7
         - confidence: confidence score (if single intent)
-        - possible_intents: all detected intents with scores
+        - possible_intents: all detected action codes with scores
     """
-    user_words = user_input.lower().split()
+    user_input_lower = user_input.lower()
     intent_confidences = {}
 
-    # Calculate confidence for each intent
-    for intent, keywords in INTENT_KEYWORDS.items():
-        confidence = calculate_confidence(user_words, keywords)
+    # Calculate confidence for each action code using CNS-8 keywords
+    for action_code, keywords in INTENT_KEYWORDS.items():
+        confidence = calculate_confidence(user_input_lower, keywords)
         if confidence > 0:
-            intent_confidences[intent] = round(confidence, 2)
+            intent_confidences[action_code] = round(confidence, 2)
 
     # Filter only high-confidence intents (>= MIN_CONFIDENCE)
     high_conf_intents = {
-        intent: conf for intent, conf in intent_confidences.items()
+        action_code: conf for action_code, conf in intent_confidences.items()
         if conf >= MIN_CONFIDENCE
     }
 
-    # Case 1: No high-confidence intents (< MIN_CONFIDENCE) → UNCLEAR
+    # Case 1: No high-confidence intents → UNCLEAR
     if not high_conf_intents:
         log_ambiguous_case(user_input, {"type": "unclear", "intents": intent_confidences})
         fallback_behavior(user_input)
@@ -119,7 +158,7 @@ def detect_intent(user_input):
             "possible_intents": intent_confidences
         }
 
-    # Case 2: Multiple high-confidence intents (>= MIN_CONFIDENCE) → AMBIGUOUS
+    # Case 2: Multiple high-confidence intents → AMBIGUOUS
     if len(high_conf_intents) > 1:
         log_ambiguous_case(user_input, {"type": "multiple", "intents": high_conf_intents})
         return {
@@ -127,12 +166,12 @@ def detect_intent(user_input):
             "possible_intents": high_conf_intents
         }
 
-    # Case 3: Single clear intent → Return it
-    final_intent = list(high_conf_intents.keys())[0]
+    # Case 3: Single clear intent → Return action code from CNS-7
+    final_action_code = list(high_conf_intents.keys())[0]
     return {
-        "action": final_intent,
-        "confidence": high_conf_intents[final_intent],
-        "all_high_conf_intents": high_conf_intents
+        "action": final_action_code,
+        "confidence": high_conf_intents[final_action_code],
+        "possible_intents": high_conf_intents
     }
 
 
