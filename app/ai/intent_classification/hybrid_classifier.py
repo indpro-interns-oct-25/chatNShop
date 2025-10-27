@@ -2,7 +2,8 @@
 
 from .keyword_matcher import KeywordMatcher
 from .embedding_matcher import EmbeddingMatcher
-from .config import (
+# --- FIX #1: Corrected relative import to go one level up ---
+from ..config import (
     KEYWORD_PRIORITY_THRESHOLD,
     KEYWORD_WEIGHT,
     EMBEDDING_WEIGHT
@@ -15,22 +16,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 class HybridClassifier:
     """
     Orchestrates intent classification by combining keyword and embedding-based matching.
-
-    Decision Flow:
-    1.  The classifier first attempts to find a high-confidence match using the KeywordMatcher.
-    2.  If the keyword match returns a result with a confidence score greater than
-        the KEYWORD_PRIORITY_THRESHOLD, that result is returned immediately, and the
-        embedding-based matching is skipped. This prioritizes explicit keyword matches.
-    3.  If the keyword match score is below the threshold or returns no result, the
-        classifier proceeds to get results from the EmbeddingMatcher as well.
-    4.  If results are available from both methods, their scores are combined using
-        a weighted average (defined by KEYWORD_WEIGHT and EMBEDDING_WEIGHT).
-    5.  The intent with the highest combined score is then selected as the final result.
-    6.  If one method fails to return a result, the result from the other is used.
-    7.  If neither method can determine an intent, a fallback response is returned.
+    ... (rest of docstring) ...
     """
 
-    def _init_(self):
+    # --- FIX #2: Corrected typo from _init_ to __init__ ---
+    def __init__(self):
         """Initializes the hybrid classifier with its constituent matchers."""
         self.keyword_matcher = KeywordMatcher()
         self.embedding_matcher = EmbeddingMatcher()
@@ -39,13 +29,7 @@ class HybridClassifier:
     def classify(self, query: str) -> dict:
         """
         Classifies the user's query to determine the intent.
-
-        Args:
-            query (str): The user input text.
-
-        Returns:
-            dict: A dictionary containing the determined 'intent' and 'confidence_score',
-                  or a fallback intent if classification is unsuccessful.
+        ... (rest of function) ...
         """
         keyword_result = self.keyword_matcher.match(query)
         
@@ -76,14 +60,7 @@ class HybridClassifier:
     def _combine_scores(self, keyword_result: dict, embedding_result: dict) -> dict:
         """
         Combines results from both matchers using weighted scoring.
-        Handles both matching and conflicting intent results.
-
-        Args:
-            keyword_result (dict): The result from the keyword matcher.
-            embedding_result (dict): The result from the embedding matcher.
-
-        Returns:
-            dict: The final intent and its combined confidence score.
+        ... (rest of function) ...
         """
         logging.info("Combining scores from keyword and embedding matchers.")
         

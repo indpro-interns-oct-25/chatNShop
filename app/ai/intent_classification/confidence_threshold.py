@@ -1,14 +1,10 @@
 from typing import List, Dict, Any, Tuple
 
-# --- Configuration for Confidence ---
-
-# The absolute minimum score required for any result to be considered valid.
-MIN_ABSOLUTE_CONFIDENCE = 0.70
-
-# The minimum required score difference between the top two results
-# to consider the top result unambiguous. If the gap is smaller than this,
-# the result is ambiguous.
-MIN_DIFFERENCE_THRESHOLD = 0.10
+# --- THIS IS THE FIX ---
+# Import the configuration from your central config file
+# instead of hard-coding it here.
+from app.ai.config import MIN_ABSOLUTE_CONFIDENCE, MIN_DIFFERENCE_THRESHOLD
+# --- END FIX ---
 
 
 def is_confident(results: List[Dict[str, Any]]) -> Tuple[bool, str]:

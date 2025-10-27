@@ -1,30 +1,27 @@
 """
 Intent Classification API - Main Application Entry Point
-
-This is the main FastAPI application that serves as the entry point for the
-hybrid rule-based + LLM intent classification backend.
 """
-
+import sys
+import os
 from contextlib import asynccontextmanager
 from typing import Dict, Any
-import os
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
+from pydantic import BaseModel
+
+# All imports should now work correctly, assuming
+# all packages (like 'app', 'app/ai', etc.)
+# have an '__init__.py' file.
+print("Attempting to import Decision Engine...")
+from app.ai.intent_classification.decision_engine import get_intent_classification
+print("Successfully imported Decision Engine.")
 
 # Load environment variables
 load_dotenv()
-
-# Import routers (these will be created later)
-# from app.api.v1 import intent, feedback, analytics, experiments
-
-# Import monitoring and logging
-# from app.monitoring.metrics import setup_metrics
-# from app.core.config_manager import get_settings
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,28 +32,20 @@ async def lifespan(app: FastAPI):
     # Startup
     print("🚀 Starting Intent Classification API...")
     
-    # Initialize database connections
-    # await init_database()
-    
-    # Initialize Redis connection
-    # await init_redis()
-    
-    # Setup monitoring
-    # setup_metrics()
-    
+    # --- Initialize the Decision Engine singleton ---
+    # This call will load all models on startup
+    try:
+        get_intent_classification("warm up")
+        print("✅ Models loaded and Decision Engine is warm.")
+    except Exception as e:
+        print(f"🛑 ERROR during model warmup: {e}")
+        
     print("✅ Intent Classification API started successfully!")
     
     yield
     
     # Shutdown
     print("🛑 Shutting down Intent Classification API...")
-    
-    # Close database connections
-    # await close_database()
-    
-    # Close Redis connection
-    # await close_redis()
-    
     print("✅ Intent Classification API shut down successfully!")
 
 
@@ -105,6 +94,48 @@ async def health_check() -> Dict[str, Any]:
         },
         "version": os.getenv("APP_VERSION", "1.0.0")
     }
+
+# --- START OF CLASSIFICATION ENDPOINT ---
+
+# 1. Define the input data model for classification
+class ClassificationInput(BaseModel):
+    text: str
+    # You could add more fields here, like user_id, session_id, etc.
+
+# 2. Create the classification POST endpoint
+@app.post("/classify", tags=["Intent Classification"])
+async def classify_intent(user_input: ClassificationInput) -> Dict[str, Any]:
+    """
+    Receives user text and returns the classified intent.
+    
+    This is the main endpoint for the intent classification service.
+    """
+    
+    print(f"Received text for classification: {user_input.text}")
+    
+    try:
+        # The classification function is synchronous (not async)
+        result = get_intent_classification(user_input.text)
+        
+        # Add original text to the response
+        result["original_text"] = user_input.text
+        
+        return result
+
+    except Exception as e:
+        # Log the error for debugging
+        print(f"🛑 ERROR: An error occurred in /classify: {e}")
+        # Return a structured error response to the user
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Classification Failed",
+                "message": "An internal error occurred while processing the request.",
+                "detail": str(e)
+            }
+        )
+
+# --- END OF CLASSIFICATION ENDPOINT ---
 
 
 # Include API routers (uncomment when routers are created)
