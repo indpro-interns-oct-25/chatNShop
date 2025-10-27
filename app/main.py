@@ -3,6 +3,7 @@ Intent Classification API - Main Application Entry Point
 """
 import sys
 import os
+import time  # <-- Import time for the retry logic
 from contextlib import asynccontextmanager
 from typing import Dict, Any
 from dotenv import load_dotenv
@@ -20,8 +21,49 @@ print("Attempting to import Decision Engine...")
 from app.ai.intent_classification.decision_engine import get_intent_classification
 print("Successfully imported Decision Engine.")
 
+# --- Qdrant Client Import ---
+from qdrant_client import QdrantClient, models
+# --- End Qdrant Client Import ---
+
 # Load environment variables
 load_dotenv()
+
+# --- Qdrant Configuration ---
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+PRODUCT_COLLECTION_NAME = "chatnshop_products"
+VECTOR_SIZE = 384  # This MUST match your embedding model (all-MiniLM-L6-v2)
+# --- End Qdrant Configuration ---
+
+
+# --- Initialize Qdrant Client with Retry Logic ---
+print(f"Attempting to connect to Qdrant at {QDRANT_URL}...")
+qdrant_client = None
+retries = 5
+wait_time = 3  # seconds
+
+for i in range(retries):
+    try:
+        # Try to connect
+        client = QdrantClient(QDRANT_URL, timeout=10) # Set a timeout
+        client.get_collections() # Make an actual test call
+        
+        # If the call succeeds:
+        qdrant_client = client
+        print(f"✅ Successfully connected to Qdrant on attempt {i+1}.")
+        break # Exit the loop
+        
+    except Exception as e:
+        print(f"Attempt {i+1} failed: Could not connect to Qdrant. Is the Docker container running?")
+        print(f"   Error detail: {e}")
+        if i < retries - 1:
+            print(f"   Retrying in {wait_time} seconds...")
+            time.sleep(wait_time)
+        else:
+            print(f"🛑 FAILED to initialize Qdrant client after {retries} attempts.")
+            # qdrant_client will remain None, and the app will log errors in lifespan
+
+# --- End Qdrant Client Initialization ---
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -39,6 +81,29 @@ async def lifespan(app: FastAPI):
         print("✅ Models loaded and Decision Engine is warm.")
     except Exception as e:
         print(f"🛑 ERROR during model warmup: {e}")
+
+    # --- Initialize Qdrant Collection ---
+    if qdrant_client:
+        print(f"Checking for Qdrant collection '{PRODUCT_COLLECTION_NAME}'...")
+        try:
+            qdrant_client.create_collection(
+                collection_name=PRODUCT_COLLECTION_NAME,
+                vectors_config=models.VectorParams(
+                    size=VECTOR_SIZE,
+                    distance=models.Distance.COSINE  # Cosine similarity is good for sentence embeddings
+                )
+            )
+            print(f"✅ Qdrant collection '{PRODUCT_COLLECTION_NAME}' created.")
+        except Exception as e:
+            # This is a common, expected error if the collection already exists
+            if "already exists" in str(e).lower() or "exists" in str(e).lower():
+                print(f"✅ Qdrant collection '{PRODUCT_COLLECTION_NAME}' already exists.")
+            else:
+                # This would be an unexpected error (e.g., Qdrant server is down)
+                print(f"🛑 ERROR: Could not create/verify Qdrant collection: {e}")
+    else:
+        print("🛑 Qdrant client not initialized, skipping collection creation.")
+    # --- End Qdrant Collection Initialization ---
         
     print("✅ Intent Classification API started successfully!")
     
@@ -84,11 +149,20 @@ async def root() -> Dict[str, Any]:
 @app.get("/health", tags=["Health"])
 async def health_check() -> Dict[str, Any]:
     """Detailed health check endpoint."""
+    # Check Qdrant connection status
+    qdrant_status = "disconnected"
+    if qdrant_client:
+        try:
+            qdrant_client.get_collections() # A simple health check operation
+            qdrant_status = "connected"
+        except Exception:
+            qdrant_status = "unhealthy"
+
     return {
         "status": "healthy",
         "timestamp": "2024-01-01T00:00:00Z",  # This would be dynamic
         "services": {
-            "database": "connected",  # This would be dynamic
+            "qdrant": qdrant_status,
             "redis": "connected",     # This would be dynamic
             "openai": "available"     # This would be dynamic
         },
@@ -119,6 +193,14 @@ async def classify_intent(user_input: ClassificationInput) -> Dict[str, Any]:
         
         # Add original text to the response
         result["original_text"] = user_input.text
+
+        # --- TODO: Add Qdrant Search Logic ---
+        # If the intent is "find_product" or similar,
+        # you would now:
+        # 1. Get the embedding for user_input.text (from your DecisionEngine or another service)
+        # 2. Use qdrant_client.search(...) to find matching products
+        # 3. Add the search results to the 'result' dictionary
+        # --- End TODO ---
         
         return result
 
