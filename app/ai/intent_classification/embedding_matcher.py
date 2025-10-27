@@ -1,126 +1,155 @@
-# app/ai/intent_classification/embedding_matcher.py
-
 """
-Embedding-based intent matcher with keyword fallback, caching, and latency logging.
+embedding_matcher.py
+Implements pre-trained embedding-based semantic similarity matching for user intents.
+Falls back to keyword-based matching if embedding confidence is low.
 """
 
 import os
-import json
 import time
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, util
 
-from .intents import INTENTS
-from .keyword_matcher import match as keyword_match
+# -------------------------------------------------------------
+# Load Pre-trained Embedding Model
+# -------------------------------------------------------------
+print("🔄 Loading model 'all-MiniLM-L6-v2'...")
+start_time = time.time()
 
-# -------------------------
-# Configuration
-# -------------------------
-MODEL_NAME = "all-MiniLM-L6-v2"
-SIMILARITY_THRESHOLD = 0.80
-CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
-CACHE_FILE = os.path.join(CACHE_DIR, "intent_embeddings.json")
+model = SentenceTransformer('all-MiniLM-L6-v2')
 
-# -------------------------
-# Embedding Matcher Class
-# -------------------------
-class EmbeddingMatcher:
-    def __init__(self):
-        print(f"🔄 Loading model '{MODEL_NAME}'...")
-        self.model = SentenceTransformer(MODEL_NAME)
-        self.intent_embeddings = self._load_or_build_cache()
-        print(f"✅ EmbeddingMatcher ready. {len(self.intent_embeddings)} intents loaded.\n")
+print(f"✅ EmbeddingMatcher ready. Model loaded in {time.time() - start_time:.2f}s")
 
-    def _load_or_build_cache(self):
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        # Load cache if exists
-        if os.path.exists(CACHE_FILE):
-            try:
-                with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                return {k: np.array(v) for k, v in data.items()}
-            except Exception:
-                print("⚠️ Failed to load cache, rebuilding...")
+# -------------------------------------------------------------
+# Define Intents and Example Phrases
+# -------------------------------------------------------------
+intent_examples = {
+    "SEARCH": [
+        "find this item",
+        "show me products",
+        "search for shoes",
+        "look up phone covers",
+    ],
+    "ADD_TO_CART": [
+        "add this to my basket",
+        "put in my cart",
+        "add item to cart",
+        "include this product",
+    ],
+    "VIEW_CART": [
+        "show my cart",
+        "open basket",
+        "view items in cart",
+        "check what’s in my cart",
+    ],
+    "CHECKOUT": [
+        "go to checkout",
+        "buy now",
+        "proceed to payment",
+        "place my order",
+    ],
+    "PRODUCT_INFO": [
+        "tell me about this product",
+        "details of this item",
+        "show specs",
+        "show me information",
+    ],
+    "COMPARE": [
+        "compare this with another",
+        "which is better",
+        "show comparison",
+        "compare two products",
+    ],
+    "FAQ": [
+        "how to return item",
+        "shipping policy",
+        "refund details",
+        "help me with an issue",
+    ],
+}
 
-        # Build cache
-        print("📦 Building intent embeddings from INTENTS...")
-        embeddings = {}
-        for intent, phrases in INTENTS.items():
-            if not phrases:
-                continue
-            vecs = self.model.encode(phrases, show_progress_bar=False)
-            embeddings[intent] = np.mean(vecs, axis=0).tolist()
-        # Save cache
-        try:
-            with open(CACHE_FILE, "w", encoding="utf-8") as f:
-                json.dump(embeddings, f)
-            print(f"💾 Saved cache to {CACHE_FILE}")
-        except Exception as e:
-            print(f"⚠️ Could not save cache: {e}")
-        return {k: np.array(v) for k, v in embeddings.items()}
+# -------------------------------------------------------------
+# Precompute Reference Embeddings for Each Intent
+# -------------------------------------------------------------
+intent_embeddings = {}
+for intent, phrases in intent_examples.items():
+    intent_embeddings[intent] = model.encode(phrases, convert_to_tensor=True)
 
-    @staticmethod
-    def _cosine_similarity(a, b):
-        a = np.array(a)
-        b = np.array(b)
-        denom = np.linalg.norm(a) * np.linalg.norm(b)
-        return float(np.dot(a, b) / denom) if denom != 0 else 0.0
+# -------------------------------------------------------------
+# Fallback: Keyword Matcher Import (lazy import to avoid circulars)
+# -------------------------------------------------------------
+def keyword_fallback(user_query):
+    """
+    Tries keyword-based intent detection if embedding similarity is low.
+    """
+    try:
+        from .keyword_matcher import keyword_match  # ensure this file exists
+        kw_intent = keyword_match(user_query)
+        if kw_intent:
+            return kw_intent
+        return None
+    except Exception as e:
+        print(f"⚠️ Keyword fallback failed: {e}")
+        return None
 
-    def predict(self, query: str):
-        start_time = time.time()
-        query = str(query).strip() if query else ""
-        if query == "":
-            return {"query": query, "predicted_intent": None, "confidence": 0.0, "fallback": False, "latency_ms": 0.0}
-
-        query_emb = self.model.encode([query], show_progress_bar=False)[0]
-
-        # Embedding match
+# -------------------------------------------------------------
+# Function: Match Intent (Hybrid)
+# -------------------------------------------------------------
+def match_intent(user_query, threshold=0.60):
+    """
+    Matches user query to the closest intent using embeddings.
+    Falls back to keyword matching if confidence < threshold.
+    Returns (intent, confidence, fallback_used)
+    """
+    try:
+        query_emb = model.encode(user_query, convert_to_tensor=True)
         best_intent = None
-        best_score = -1.0
-        for intent, emb in self.intent_embeddings.items():
-            score = self._cosine_similarity(query_emb, emb)
-            if score > best_score:
-                best_score = score
+        best_score = 0.0
+
+        # Compute similarity across all intents
+        for intent, ref_emb in intent_embeddings.items():
+            sim = util.cos_sim(query_emb, ref_emb).max().item()
+            if sim > best_score:
+                best_score = sim
                 best_intent = intent
 
-        predicted = best_intent if best_score >= SIMILARITY_THRESHOLD else None
-        fallback_used = False
+        # High-confidence embedding match
+        if best_score >= threshold:
+            return best_intent, round(best_score, 3), False
 
-        # Fallback to keyword match
-        if predicted is None:
-            kw_intent = keyword_match(query)
-            if kw_intent:
-                predicted = kw_intent
-                fallback_used = True
+        # Low confidence → Fallback to keyword matching
+        kw_intent = keyword_fallback(user_query)
+        if kw_intent:
+            return kw_intent, round(best_score, 3), True
 
-        latency = (time.time() - start_time) * 1000.0
-        return {
-            "query": query,
-            "predicted_intent": predicted,
-            "confidence": round(float(best_score), 4),
-            "fallback": fallback_used,
-            "latency_ms": round(latency, 2)
-        }
+        # No confident match found
+        return None, round(best_score, 3), True
 
-# -------------------------
-# Demo
-# -------------------------
+    except Exception as e:
+        print(f"❌ Error during intent matching: {e}")
+        return None, 0.0, True
+
+# -------------------------------------------------------------
+# Test Block (for standalone execution)
+# -------------------------------------------------------------
 if __name__ == "__main__":
-    matcher = EmbeddingMatcher()
-    test_queries = [
-        "add this item to my basket",
-        "can I see my shopping cart?",
-        "I want to check out now",
-        "find me some shoes",
-        "what is this item?",
-        "compare these two products",
-        "search for red sneakers",
-        "please add it to the bag"
-    ]
+    print("\n🚀 Testing Semantic Intent Matching (with Fallback)...\n")
 
-    for q in test_queries:
-        res = matcher.predict(q)
-        print(f"Query: '{res['query']}' → Intent: {res['predicted_intent']}, "
-              f"Confidence: {res['confidence']}, Fallback: {res['fallback']}, "
-              f"Latency: {res['latency_ms']}ms")
+    while True:
+        user_query = input("🗣️  User Query (or 'exit'): ").strip()
+        if user_query.lower() == "exit":
+            print("👋 Exiting matcher.")
+            break
 
+        start = time.time()
+        intent, confidence, fallback = match_intent(user_query)
+        latency = (time.time() - start) * 1000
+
+        if intent:
+            if fallback:
+                print(f"🔁 Fallback used → Keyword Match: {intent} ({confidence})")
+            else:
+                print(f"✅ Semantic Match! ({confidence}) → {intent}")
+        else:
+            print(f"⚠️ No match found. Try rephrasing.")
+
+        print(f"⏱️  Latency: {latency:.2f} ms\n")
