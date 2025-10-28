@@ -49,7 +49,7 @@ for i in range(retries):
         
         # If the call succeeds:
         qdrant_client = client
-        print(f"✅ Successfully connected to Qdrant on attempt {i+1}.")
+        print(f"Successfully connected to Qdrant on attempt {i+1}.")
         break # Exit the loop
         
     except Exception as e:
@@ -59,7 +59,7 @@ for i in range(retries):
             print(f"   Retrying in {wait_time} seconds...")
             time.sleep(wait_time)
         else:
-            print(f"🛑 FAILED to initialize Qdrant client after {retries} attempts.")
+            print(f"FAILED to initialize Qdrant client after {retries} attempts.")
             # qdrant_client will remain None, and the app will log errors in lifespan
 
 # --- End Qdrant Client Initialization ---
@@ -71,16 +71,15 @@ async def lifespan(app: FastAPI):
     Application lifespan context manager.
     Handles startup and shutdown events.
     """
-    # Startup
-    print("🚀 Starting Intent Classification API...")
+    print(" Starting Intent Classification API...")
     
     # --- Initialize the Decision Engine singleton ---
     # This call will load all models on startup
     try:
         get_intent_classification("warm up")
-        print("✅ Models loaded and Decision Engine is warm.")
+        print(" Models loaded and Decision Engine is warm.")
     except Exception as e:
-        print(f"🛑 ERROR during model warmup: {e}")
+        print(f" ERROR during model warmup: {e}")
 
     # --- Initialize Qdrant Collection ---
     if qdrant_client:
@@ -93,25 +92,22 @@ async def lifespan(app: FastAPI):
                     distance=models.Distance.COSINE  # Cosine similarity is good for sentence embeddings
                 )
             )
-            print(f"✅ Qdrant collection '{PRODUCT_COLLECTION_NAME}' created.")
+            print(f" Qdrant collection '{PRODUCT_COLLECTION_NAME}' created.")
         except Exception as e:
             # This is a common, expected error if the collection already exists
             if "already exists" in str(e).lower() or "exists" in str(e).lower():
-                print(f"✅ Qdrant collection '{PRODUCT_COLLECTION_NAME}' already exists.")
+                print(f" Qdrant collection '{PRODUCT_COLLECTION_NAME}' already exists.")
             else:
                 # This would be an unexpected error (e.g., Qdrant server is down)
-                print(f"🛑 ERROR: Could not create/verify Qdrant collection: {e}")
+                print(f" ERROR: Could not create/verify Qdrant collection: {e}")
     else:
-        print("🛑 Qdrant client not initialized, skipping collection creation.")
+        print(" Qdrant client not initialized, skipping collection creation.")
     # --- End Qdrant Collection Initialization ---
         
-    print("✅ Intent Classification API started successfully!")
-    
+    print(" Intent Classification API started successfully!")
     yield
-    
-    # Shutdown
-    print("🛑 Shutting down Intent Classification API...")
-    print("✅ Intent Classification API shut down successfully!")
+    print("Shutting down Intent Classification API...")
+    print(" Intent Classification API shut down successfully!")
 
 
 # Create FastAPI application
@@ -134,7 +130,6 @@ app.add_middleware(
 )
 
 
-# Health check endpoints
 @app.get("/", tags=["Health"])
 async def root() -> Dict[str, Any]:
     """Root endpoint - API health check."""
@@ -142,7 +137,7 @@ async def root() -> Dict[str, Any]:
         "status": "healthy",
         "service": "Intent Classification API",
         "version": os.getenv("APP_VERSION", "1.0.0"),
-        "message": "🤖 Hybrid Intent Classification System is running!"
+        "message": " Hybrid Intent Classification System is running!"
     }
 
 
@@ -160,7 +155,7 @@ async def health_check() -> Dict[str, Any]:
 
     return {
         "status": "healthy",
-        "timestamp": "2024-01-01T00:00:00Z",  # This would be dynamic
+        "timestamp": "2024-01-01T00:00:00Z",
         "services": {
             "qdrant": qdrant_status,
             "redis": "connected",     # This would be dynamic
@@ -206,7 +201,7 @@ async def classify_intent(user_input: ClassificationInput) -> Dict[str, Any]:
 
     except Exception as e:
         # Log the error for debugging
-        print(f"🛑 ERROR: An error occurred in /classify: {e}")
+        print(f"ERROR: An error occurred in /classify: {e}")
         # Return a structured error response to the user
         return JSONResponse(
             status_code=500,
@@ -246,9 +241,9 @@ def run():
     """Run the application with uvicorn."""
     uvicorn.run(
         "app.main:app",
-        host=os.getenv("HOST", "0.0.0.0"),
+        host=os.getenv("HOST", "127.0.0.1"),
         port=int(os.getenv("PORT", 8000)),
-        reload=os.getenv("RELOAD", "true").lower() == "true",
+        reload=False,
         workers=int(os.getenv("WORKERS", 1)),
         log_level=os.getenv("LOG_LEVEL", "info").lower()
     )
