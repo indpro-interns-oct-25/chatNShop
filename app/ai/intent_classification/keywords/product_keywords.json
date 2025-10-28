@@ -7,7 +7,11 @@
       "what is this", "learn about", "product overview", "specs", "technical details",
       "item info", "item description", "product summary", "information on product", "product facts",
       "know about product", "product guide", "details of item", "product sheet", "product profile",
-      "full product info", "product documentation", "product description page", "product catalog info", "product highlights"
+      "full product info", "product documentation", "product description page", "product catalog info", "product highlights",
+      "prodcut info", "prodcut information", "prodcut details", "telll me about", "desciption",
+      "prodcut page", "whatt is this", "learnn about", "prodcut overview", "specss",
+      "itemm info", "itemm description", "prodcut summary", "prodcut facts", "prodcut guide",
+      "prodcut sheet", "prodcut profile", "prodcut documentation", "prodcut highlights", "prodcut catalog info"
     ]
   },
   "PRODUCT_DETAILS": {
