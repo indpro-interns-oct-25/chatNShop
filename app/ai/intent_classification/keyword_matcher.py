@@ -1,22 +1,11 @@
-from .config_manager import ConfigManager
-
-config = ConfigManager()
-KEYWORDS = config.get_keywords()
-def match_keywords(text):
-    for intent, words in KEYWORDS.items():
-        for word in words:
-            if word in text.lower():
-                return intent
-    return "unknown"
 import os
 import re
 from typing import Callable, Dict, List, Tuple, Optional, Union
 from functools import lru_cache
 
-# --- THIS IS THE FIX ---
+# Normalization and loader imports
 from app.utils.text_processing import normalize_text
 from app.ai.intent_classification.keywords.loader import load_keywords
-# --- END FIX ---
 
 # Directory path for keyword JSONs
 KEYWORDS_DIR = os.path.join(os.path.dirname(__file__), "keywords")
@@ -113,7 +102,7 @@ def match_keywords(
     text: str,
     *,
     normalize: Union[Callable[[str], str], None] = None,
-    top_n: int = 1,
+    top_n: int = 5,
 ) -> List[Dict]:
     if normalize is None:
         normalize = normalize_text
