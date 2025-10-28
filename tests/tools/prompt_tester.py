@@ -27,8 +27,8 @@ else:
 # -------------------------------------------------------------------
 # ✅ Load system prompt & few-shot examples
 # -------------------------------------------------------------------
-SYSTEM_PROMPT_PATH = "prompts/system_prompt_v1.0.0.txt"
-FEW_SHOT_PATH = "prompts/few_shot_examples_v1.0.0.json"
+SYSTEM_PROMPT_PATH = "app/ai/llm_intent/prompts/system_prompt_v1.0.0.txt"
+FEW_SHOT_PATH = "app/ai/llm_intent/prompts/few_shot_examples_v1.0.0.json"
 
 if not os.path.exists(SYSTEM_PROMPT_PATH):
     raise FileNotFoundError(f"❌ Missing system prompt: {SYSTEM_PROMPT_PATH}")
