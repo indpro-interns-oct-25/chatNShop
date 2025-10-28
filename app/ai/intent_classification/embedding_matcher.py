@@ -40,21 +40,34 @@ class EmbeddingMatcher:
     def search(self, query: str, threshold: float = 0.60) -> List[Dict]:
         """
         Matches user query to the closest intent using embeddings.
-        Returns a list of all intents and their scores.
+        Returns a list of all intents and their scores with enhanced error handling.
         """
         try:
-            query_emb = self.model.encode(query, convert_to_tensor=True)
+            # Enhanced query preprocessing
+            if not query or not query.strip():
+                return []
+            
+            # Clean and normalize query
+            clean_query = query.strip().lower()
+            if len(clean_query) < 2:  # Too short to be meaningful
+                return []
+            
+            query_emb = self.model.encode(clean_query, convert_to_tensor=True)
             results = []
 
             # Compute similarity across all intents
             for intent, ref_emb in self.intent_embeddings.items():
-                sim = util.cos_sim(query_emb, ref_emb).max().item()
-                results.append({
-                    "id": intent, 
-                    "intent": intent,
-                    "score": round(sim, 4),
-                    "source": "embedding"
-                })
+                if ref_emb is not None:
+                    sim = util.cos_sim(query_emb, ref_emb).max().item()
+                    # Only include results above minimum threshold
+                    if sim >= 0.1:  # Very low threshold to catch edge cases
+                        results.append({
+                            "id": intent, 
+                            "intent": intent,
+                            "score": round(sim, 4),
+                            "source": "embedding",
+                            "query": clean_query
+                        })
 
             # Sort by score
             results.sort(key=lambda x: x['score'], reverse=True)
@@ -62,7 +75,14 @@ class EmbeddingMatcher:
 
         except Exception as e:
             print(f"❌ Error during embedding matching: {e}")
-            return []
+            # Return a generic search result as fallback
+            return [{
+                "id": "SEARCH_PRODUCT",
+                "intent": "SEARCH_PRODUCT", 
+                "score": 0.1,
+                "source": "embedding_fallback",
+                "error": str(e)
+            }]
 
 # -------------------------------------------------------------
 # (All of your original data/functions remain below)

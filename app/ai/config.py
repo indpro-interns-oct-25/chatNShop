@@ -9,8 +9,8 @@ the intent classification models.
 
 # If a keyword match has a score >= this value, we'll return it
 # immediately and skip the (slower) embedding search.
-# Set to 1.0 to only prioritize exact "perfect" matches.
-PRIORITY_THRESHOLD = 0.95
+# Lowered from 0.95 to 0.80 for better coverage
+PRIORITY_THRESHOLD = 0.80
 
 
 # --- Hybrid Blending Weights ---
@@ -26,9 +26,11 @@ WEIGHTS = {
 # --- Confidence Thresholds (for confidence_threshold.py) ---
 
 # The absolute minimum score required for any result to be considered valid.
-MIN_ABSOLUTE_CONFIDENCE = 0.70
+# Lowered to 0.30 for maximum coverage
+MIN_ABSOLUTE_CONFIDENCE = 0.30
 
 # The minimum required score difference between the top two results
 # to consider the top result unambiguous. If the gap is smaller than this,
 # the result is "AMBIGUOUS".
-MIN_DIFFERENCE_THRESHOLD = 0.10
+# Lowered from 0.10 to 0.05 for better tolerance
+MIN_DIFFERENCE_THRESHOLD = 0.05

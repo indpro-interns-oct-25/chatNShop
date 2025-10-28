@@ -4,10 +4,11 @@ from .keyword_matcher import KeywordMatcher
 from .embedding_matcher import EmbeddingMatcher
 # --- FIX #1: Corrected relative import to go one level up ---
 from ..config import (
-    KEYWORD_PRIORITY_THRESHOLD,
-    KEYWORD_WEIGHT,
-    EMBEDDING_WEIGHT
+    PRIORITY_THRESHOLD as KEYWORD_PRIORITY_THRESHOLD,
+    WEIGHTS
 )
+KEYWORD_WEIGHT = WEIGHTS["keyword"]
+EMBEDDING_WEIGHT = WEIGHTS["embedding"]
 import logging
 
 # Configure logging

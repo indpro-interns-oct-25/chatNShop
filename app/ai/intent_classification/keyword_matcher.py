@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Callable, Dict, List, Tuple, Optional
+from typing import Callable, Dict, List, Tuple, Optional, Union
 from functools import lru_cache
 
 # --- THIS IS THE FIX ---
@@ -72,7 +72,24 @@ def _compile_pattern(pattern: str):
 
 @lru_cache(maxsize=128)
 def _normalize_and_tokenize(text: str) -> Tuple[str, Tuple[str, ...]]:
+    """Cache normalized text and tokens to avoid redundant processing."""
+    # Enhanced normalization for special characters
     normalized = normalize_text(text)
+    
+    # Handle common special character patterns
+    normalized = re.sub(r'[!?.,;:]+', '', normalized)  # Remove punctuation
+    normalized = re.sub(r'[\'"]+', '', normalized)      # Remove quotes
+    normalized = re.sub(r'[-_]+', ' ', normalized)      # Replace hyphens/underscores with space
+    normalized = re.sub(r'[&]+', ' and ', normalized)    # Replace & with 'and'
+    normalized = re.sub(r'[+]+', ' plus ', normalized)   # Replace + with 'plus'
+    normalized = re.sub(r'[@]+', ' at ', normalized)     # Replace @ with 'at'
+    normalized = re.sub(r'[#]+', ' hash ', normalized)   # Replace # with 'hash'
+    normalized = re.sub(r'[$]+', ' dollar ', normalized) # Replace $ with 'dollar'
+    normalized = re.sub(r'[%]+', ' percent ', normalized) # Replace % with 'percent'
+    
+    # Clean up multiple spaces
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    
     tokens = tuple(re.findall(r"\w+", normalized))
     return normalized, tokens
 
@@ -85,7 +102,7 @@ def _get_cached_keywords():
 def match_keywords(
     text: str,
     *,
-    normalize: Callable[[str], str] | None = None,
+    normalize: Union[Callable[[str], str], None] = None,
     top_n: int = 1,
 ) -> List[Dict]:
     if normalize is None:
