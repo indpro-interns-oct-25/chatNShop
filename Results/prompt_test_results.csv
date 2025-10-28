@@ -1,11 +1,11 @@
 id,timestamp,query,expected,predicted,confidence,correct,reasoning
-1,2025-10-28T11:34:18.060401,Show me running shoes under $100,SEARCH_PRICE_RANGE,SEARCH_PRICE_RANGE,0.89,True,Offline mock — detected intent: SEARCH_PRICE_RANGE
-2,2025-10-28T11:34:18.265008,Add this to my cart,ADD_TO_CART,ADD_TO_CART,0.98,True,Offline mock — detected intent: ADD_TO_CART
-3,2025-10-28T11:34:18.477370,Apply coupon SAVE20,APPLY_COUPON,APPLY_COUPON,0.8,True,Offline mock — detected intent: APPLY_COUPON
-4,2025-10-28T11:34:18.684912,Where is my order ORD123?,ORDER_STATUS,ORDER_STATUS,0.94,True,Offline mock — detected intent: ORDER_STATUS
-5,2025-10-28T11:34:18.895693,I want to return this item,INITIATE_RETURN,INITIATE_RETURN,0.83,True,Offline mock — detected intent: INITIATE_RETURN
-6,2025-10-28T11:34:19.109087,Notify me when this is back in stock,SUBSCRIBE_PRODUCT,SUBSCRIBE_PRODUCT,0.98,True,Offline mock — detected intent: SUBSCRIBE_PRODUCT
-7,2025-10-28T11:34:19.313073,There was a suspicious charge on my card,REPORT_FRAUD,REPORT_FRAUD,0.78,True,Offline mock — detected intent: REPORT_FRAUD
-8,2025-10-28T11:34:19.520518,What do you recommend for runners?,PERSONALIZED_RECOMMENDATIONS,PERSONALIZED_RECOMMENDATIONS,0.9,True,Offline mock — detected intent: PERSONALIZED_RECOMMENDATIONS
-9,2025-10-28T11:34:19.735924,Help me reset my password,PASSWORD_RESET,PASSWORD_RESET,0.78,True,Offline mock — detected intent: PASSWORD_RESET
-10,2025-10-28T11:34:19.938035,Show me my cart,ADD_TO_CART,ADD_TO_CART,0.91,True,Offline mock — detected intent: ADD_TO_CART
+1,2025-10-28T11:58:33.750672,Show me running shoes under $100,SEARCH_PRICE_RANGE,SEARCH_PRICE_RANGE,0.94,True,Offline mock — detected intent: SEARCH_PRICE_RANGE
+2,2025-10-28T11:58:33.959139,Add this to my cart,ADD_TO_CART,ADD_TO_CART,0.84,True,Offline mock — detected intent: ADD_TO_CART
+3,2025-10-28T11:58:34.171914,Apply coupon SAVE20,APPLY_COUPON,APPLY_COUPON,0.82,True,Offline mock — detected intent: APPLY_COUPON
+4,2025-10-28T11:58:34.387300,Where is my order ORD123?,ORDER_STATUS,ORDER_STATUS,0.75,True,Offline mock — detected intent: ORDER_STATUS
+5,2025-10-28T11:58:34.594322,I want to return this item,INITIATE_RETURN,INITIATE_RETURN,0.96,True,Offline mock — detected intent: INITIATE_RETURN
+6,2025-10-28T11:58:34.802922,Notify me when this is back in stock,SUBSCRIBE_PRODUCT,SUBSCRIBE_PRODUCT,0.89,True,Offline mock — detected intent: SUBSCRIBE_PRODUCT
+7,2025-10-28T11:58:35.010984,There was a suspicious charge on my card,REPORT_FRAUD,REPORT_FRAUD,0.94,True,Offline mock — detected intent: REPORT_FRAUD
+8,2025-10-28T11:58:35.212043,What do you recommend for runners?,PERSONALIZED_RECOMMENDATIONS,PERSONALIZED_RECOMMENDATIONS,0.88,True,Offline mock — detected intent: PERSONALIZED_RECOMMENDATIONS
+9,2025-10-28T11:58:35.415843,Help me reset my password,PASSWORD_RESET,PASSWORD_RESET,0.82,True,Offline mock — detected intent: PASSWORD_RESET
+10,2025-10-28T11:58:35.622611,Show me my cart,ADD_TO_CART,ADD_TO_CART,0.9,True,Offline mock — detected intent: ADD_TO_CART

@@ -6,7 +6,13 @@
       "browse products", "locate product", "product lookup", "product finder", "search for item",
       "search goods", "find item", "look up product", "product query", "shop for",
       "search catalogue", "search online", "search shop", "search inventory", "find in store",
-      "explore products", "discover product", "search merchandise", "product browse", "product hunting"
+      "explore products", "discover product", "search merchandise", "product browse", "product hunting",
+      "track product", "product list", "check product availability", "find specific product", "search item details",
+      "serch product", "serach product", "seach product", "findd product", "lookk for product",
+      "browsee products", "prodcut search", "prodcuts search", "itemss search", "findd item",
+      "lookk up product", "prodcut query", "serch items", "findd specific product", "prodcut details",
+      "serach items", "lookk for item", "prodcut finder", "serch goods", "findd goods",
+      "browsee items", "serach online", "prodcut lookup", "itemss finder", "serch catalogue"
     ]
   },
   "SEARCH_CATEGORY": {

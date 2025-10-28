@@ -4,7 +4,13 @@
     "keywords": [
       "add to cart", "put in cart", "buy now", "add product", "insert item",
       "purchase", "add to basket", "shop item", "order now", "include in cart",
-      "add this product", "add item to cart", "place in cart", "cart this product", "add to shopping cart"
+      "add this product", "add item to cart", "place in cart", "cart this product", "add to shopping cart",
+      "add selected item", "add chosen item", "add to checkout", "add product to basket", "add to order",
+      "addd to cart", "addd product", "cartt this", "baskett add", "addd item",
+      "addd to basket", "addd selected", "addd chosen", "cartt product", "addd to shopping cart",
+      "add to cart!", "add product!", "buy now!", "add to basket!", "order now!",
+      "add to cart?", "add product?", "buy now?", "add to basket?", "order now?",
+      "add to cart.", "add product.", "buy now.", "add to basket.", "order now."
     ]
   },
   "REMOVE_FROM_CART": {
