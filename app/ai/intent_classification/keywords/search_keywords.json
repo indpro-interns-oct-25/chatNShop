@@ -1,5 +1,6 @@
 {
 <<<<<<< HEAD
+<<<<<<< HEAD
   "SEARCH": [
     {"pattern": "find (.*)", "action": "SEARCH_PRODUCT", "weight": 1.0},
     {"pattern": "look for (.*)", "action": "SEARCH_PRODUCT", "weight": 0.95},
@@ -10,6 +11,8 @@
     {"pattern": "what (.*) do you have", "action": "SEARCH_PRODUCT", "weight": 0.7}
   ]
 =======
+=======
+>>>>>>> bb04fb89da1ca2e218e03d0e0a616611a86ba595
   "SEARCH_PRODUCT": {
     "priority": 1,
     "keywords": [
@@ -18,7 +21,12 @@
       "search goods", "find item", "look up product", "product query", "shop for",
       "search catalogue", "search online", "search shop", "search inventory", "find in store",
       "explore products", "discover product", "search merchandise", "product browse", "product hunting",
-      "track product", "product list", "check product availability", "find specific product", "search item details"
+      "track product", "product list", "check product availability", "find specific product", "search item details",
+      "serch product", "serach product", "seach product", "findd product", "lookk for product",
+      "browsee products", "prodcut search", "prodcuts search", "itemss search", "findd item",
+      "lookk up product", "prodcut query", "serch items", "findd specific product", "prodcut details",
+      "serach items", "lookk for item", "prodcut finder", "serch goods", "findd goods",
+      "browsee items", "serach online", "prodcut lookup", "itemss finder", "serch catalogue"
     ]
   },
   "SEARCH_CATEGORY": {
@@ -154,5 +162,8 @@
       "show products list style"
     ]
   }
+<<<<<<< HEAD
 >>>>>>> c6d21c446f918956d4a260f43e42ee5786cf2cf1
+=======
+>>>>>>> bb04fb89da1ca2e218e03d0e0a616611a86ba595
 }

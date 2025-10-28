@@ -22,6 +22,15 @@ def load_all_keywords(keywords_dir=None):   # ✅ add optional parameter
 
     return all_keywords
 
+<<<<<<< HEAD
 
 
 
+=======
+# If this file is run directly, print loaded keywords
+if __name__ == "__main__":
+    keywords = load_keywords()
+    print("Loaded keyword intents:")
+    for intent, details in keywords.items():
+        print(f"{intent} (priority {details.get('priority')}): {len(details.get('keywords', []))} keywords")
+>>>>>>> bb04fb89da1ca2e218e03d0e0a616611a86ba595
