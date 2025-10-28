@@ -1,10 +1,9 @@
-# app/ai/intent_classification/scoring.py
 """
 Scoring module for intent classification matches.
 Calculates confidence for matched intents.
 """
-
 from typing import List, Dict
+
 
 def calculate_confidence(matches: List[Dict]) -> float:
     """
@@ -26,3 +25,4 @@ def aggregate_confidence(matches: List[Dict]) -> float:
         return 0.0
     total_score = sum(m.get("score", 0.0) for m in matches)
     return total_score / len(matches)
+

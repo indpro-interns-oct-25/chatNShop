@@ -33,4 +33,3 @@ if __name__ == "__main__":
     print("Loaded keyword intents:")
     for intent, details in keywords.items():
         print(f"{intent} (priority {details.get('priority')}): {len(details.get('keywords', []))} keywords")
-
