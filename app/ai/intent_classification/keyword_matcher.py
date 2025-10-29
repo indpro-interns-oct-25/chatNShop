@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 '''from app.config.config_manager import ConfigManager
 
 config = ConfigManager()
@@ -8,6 +9,9 @@ def match_keywords(text):
             if word in text.lower():
                 return intent
     return "unknown" '''
+=======
+# Removed old config_manager import - using new implementation below
+>>>>>>> 8ce8b01ca5e8a785c81715269b054287f0d23d52
 import os
 import re
 from typing import Callable, Dict, List, Tuple, Optional, Union
