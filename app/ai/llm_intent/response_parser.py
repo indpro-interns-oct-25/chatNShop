@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -30,25 +31,49 @@ EXPECTED_SCHEMA: Dict[str, str] = {
 
 
 def parse_llm_response(raw: Dict[str, Any]) -> LLMIntentResponse:
-    """Validate the raw LLM payload and clamp confidence into [0, 1]."""
+    """Validate the raw LLM payload returned from GPT-4 models.
+
+    The newer chat completions API returns a nested structure. This helper looks for a
+    JSON object inside the assistant message content and performs schema validation
+    before returning a normalized dataclass instance.
+    """
 
     try:
-        intent = raw["intent"]
-        intent_category = raw["intent_category"]
-        action_code = raw["action_code"]
-        confidence = float(raw["confidence"])
-    except (KeyError, TypeError, ValueError) as exc:  # pragma: no cover - defensive
-        raise ValueError("Malformed LLM intent response") from exc
+        choice = raw["choices"][0]
+        message = choice["message"]
+        content = message.get("content")
+    except (KeyError, IndexError, TypeError) as exc:  # pragma: no cover - defensive
+        raise ValueError("Malformed OpenAI chat completion response") from exc
+
+    if not content:
+        raise ValueError("OpenAI response missing assistant content")
+
+    if isinstance(content, list):
+        content = "".join(part.get("text", "") for part in content)
+
+    try:
+        payload = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Assistant content is not valid JSON") from exc
+
+    for required_key in ("intent", "intent_category", "action_code", "confidence"):
+        if required_key not in payload:
+            raise ValueError(f"LLM payload missing required key '{required_key}'")
+
+    try:
+        confidence = float(payload["confidence"])
+    except (TypeError, ValueError):
+        raise ValueError("Confidence must be a numeric value")
 
     confidence = max(0.0, min(confidence, 1.0))
 
     return LLMIntentResponse(
-        intent=intent,
-        intent_category=intent_category,
-        action_code=action_code,
+        intent=str(payload["intent"]),
+        intent_category=str(payload["intent_category"]),
+        action_code=str(payload["action_code"]),
         confidence=confidence,
-        processing_time_ms=raw.get("processing_time_ms"),
-        reasoning=raw.get("reasoning"),
+        processing_time_ms=payload.get("processing_time_ms"),
+        reasoning=payload.get("reasoning"),
     )
 
 

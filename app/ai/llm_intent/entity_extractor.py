@@ -90,6 +90,7 @@ INTENT_CATEGORIES: Dict[str, List[str]] = {
         "REPORT_FRAUD",
         "LOCK_ACCOUNT",
     ],
+    
 }
 """All categories the LLM classifier must be able to recognize."""
 

@@ -2,7 +2,7 @@
 Decision Engine
 This file contains the main logic for the intent classification.
 """
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 # --- THIS IS THE FIX ---
 # All imports must start with 'app.'
@@ -17,6 +17,7 @@ class DecisionEngine:
     Orchestrates the hybrid search process.
     """
     def __init__(self):
+
         """
         Initializes the Decision Engine and its constituent matchers.
         """
@@ -31,6 +32,7 @@ class DecisionEngine:
         print("✅ DecisionEngine Initialized: Settings loaded from config.")
 
     def search(self, query: str) -> Dict[str, Any]:
+
         """
         Executes the full hybrid search flow and evaluates confidence.
         """
@@ -38,11 +40,13 @@ class DecisionEngine:
 
         # Apply the priority rule
         if keyword_results and keyword_results[0]['score'] >= self.priority_threshold:
+
             print(f"✅ Priority rule triggered. Returning high-confidence keyword match: {keyword_results[0]['id']}")
-            return {
-                "status": "CONFIDENT_KEYWORD",
-                "intent": keyword_results[0]
-            }
+            return self._finalize_output(
+                status="CONFIDENT_KEYWORD",
+                intent=keyword_results[0],
+                candidates=keyword_results,
+            )
 
         # If rule not met, perform embedding search
         embedding_results = self.embedding_matcher.search(query)
@@ -51,6 +55,7 @@ class DecisionEngine:
         blended_results = self._blend_results(keyword_results, embedding_results)
 
         if not blended_results:
+
             # Enhanced fallback: try with lower thresholds
             print(f"⚠ No match found for query: '{query}', trying fallback...")
             
@@ -59,43 +64,51 @@ class DecisionEngine:
                 embedding_results_lower = [r for r in embedding_results if r['score'] >= 0.3]
                 if embedding_results_lower:
                     print(f"✅ Fallback found embedding match with lower threshold")
-                    return {
-                        "status": "FALLBACK_EMBEDDING",
-                        "intent": embedding_results_lower[0]
-                    }
+                    return self._finalize_output(
+                        status="FALLBACK_EMBEDDING",
+                        intent=embedding_results_lower[0],
+                        candidates=embedding_results_lower,
+                        trigger_reason="embedding_low_confidence",
+                    )
             
             # Fallback 2: Lower keyword threshold
             if keyword_results:
                 keyword_results_lower = [r for r in keyword_results if r['score'] >= 0.3]
                 if keyword_results_lower:
                     print(f"✅ Fallback found keyword match with lower threshold")
-                    return {
-                        "status": "FALLBACK_KEYWORD",
-                        "intent": keyword_results_lower[0]
-                    }
+                    return self._finalize_output(
+                        status="FALLBACK_KEYWORD",
+                        intent=keyword_results_lower[0],
+                        candidates=keyword_results_lower,
+                        trigger_reason="keyword_low_confidence",
+                    )
             
             # Fallback 3: Generic search intent
             print(f"⚠ No specific match found, returning generic search intent")
-            return {
-                "status": "FALLBACK_GENERIC",
-                "intent": {
+            return self._finalize_output(
+                status="FALLBACK_GENERIC",
+                intent={
                     "id": "SEARCH_PRODUCT",
-                    "intent": "SEARCH_PRODUCT", 
+                    "intent": "SEARCH_PRODUCT",
                     "score": 0.1,
                     "source": "fallback",
-                    "reason": "generic_search_fallback"
-                }
-            }
+                    "reason": "generic_search_fallback",
+                },
+                trigger_reason="no_match_found",
+            )
 
         # Evaluate final confidence
         is_confident, reason = confidence_threshold.is_confident(blended_results)
 
         if is_confident:
+
             print(f"✅ Blended result is confident. Reason: {reason}")
-            return {
-                "status": reason,
-                "intent": blended_results[0]
-            }
+            return self._finalize_output(
+                status=reason,
+                intent=blended_results[0],
+                candidates=blended_results,
+            )
+
         else:
             # Enhanced fallback for low confidence results
             print(f"⚠ Blended result is NOT confident. Reason: {reason}")
@@ -103,23 +116,69 @@ class DecisionEngine:
             # If we have any results, return the best one with fallback status
             if blended_results and blended_results[0]['score'] >= 0.1:
                 print(f"✅ Returning best available result as fallback")
-                return {
-                    "status": f"FALLBACK_{reason}",
-                    "intent": blended_results[0]
-                }
+                return self._finalize_output(
+                    status=f"FALLBACK_{reason}",
+                    intent=blended_results[0],
+                    candidates=blended_results,
+                    trigger_reason=reason,
+                )
             
             # Final fallback to generic search
             print(f"⚠ No suitable results, returning generic search")
-            return {
-                "status": "FALLBACK_GENERIC",
-                "intent": {
+            return self._finalize_output(
+                status="FALLBACK_GENERIC",
+                intent={
                     "id": "SEARCH_PRODUCT",
-                    "intent": "SEARCH_PRODUCT", 
+                    "intent": "SEARCH_PRODUCT",
                     "score": 0.1,
                     "source": "fallback",
-                    "reason": "generic_search_fallback"
-                }
-            }
+                    "reason": "generic_search_fallback",
+                },
+                trigger_reason="no_suitable_results",
+            )
+
+    def _finalize_output(
+        self,
+        *,
+        status: str,
+        intent: Dict[str, Any],
+        candidates: Optional[List[Dict[str, Any]]] = None,
+        trigger_reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Normalize the decision engine payload for downstream consumers."""
+
+        normalized_candidates: List[Dict[str, Any]] = []
+        if candidates:
+            # Ensure we don't mutate the caller-provided list.
+            normalized_candidates = [dict(candidate) for candidate in candidates]
+
+        if not normalized_candidates and intent:
+            normalized_candidates = [dict(intent)]
+
+        # Guarantee the resolved intent is the first candidate.
+        if normalized_candidates and normalized_candidates[0].get("id") != intent.get("id"):
+            normalized_candidates.insert(0, dict(intent))
+
+        top_score = normalized_candidates[0].get("score", 0.0) if normalized_candidates else intent.get("score", 0.0) or 0.0
+        next_score = normalized_candidates[1].get("score", 0.0) if len(normalized_candidates) > 1 else 0.0
+
+        payload = {
+            "status": status,
+            "intent": intent,
+            "candidates": normalized_candidates,
+            "top_confidence": round(float(top_score), 4),
+            "next_best_confidence": round(float(next_score), 4),
+            "confidence_gap": round(float(top_score - next_score), 4),
+            "resolved_intent": intent.get("intent") or intent.get("id"),
+            "resolved_action_code": intent.get("action") or intent.get("id"),
+            "is_fallback": status.startswith("FALLBACK"),
+            "needs_llm_review": not status.upper().startswith("CONFIDENT"),
+        }
+
+        if trigger_reason:
+            payload["trigger_reason"] = trigger_reason
+
+        return payload
 
     def _blend_results(self, kw_results: List, emb_results: List) -> List[Dict]:
         """

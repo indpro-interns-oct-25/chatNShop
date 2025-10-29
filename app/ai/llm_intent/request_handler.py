@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+import json
+import logging
+import os
+from typing import Any, Dict, List, Optional
 
 from app.schemas.llm_intent import LLMIntentRequest
 
 from .confidence_calibrator import TriggerContext, should_trigger_llm
 from .entity_extractor import INTENT_CATEGORIES
-from .fallback_manager import build_fallback_response
-from .openai_client import OpenAIClient
+from .error_handler import handle_llm_exception
+from .openai_client import CircuitBreakerOpenError, OpenAIClient
 from .response_parser import LLMIntentResponse as ParsedLLMResponse, parse_llm_response
+
+
+logger = logging.getLogger("app.llm_intent.request_handler")
 
 
 class RequestHandler:
@@ -68,10 +74,7 @@ class RequestHandler:
                 },
             }
         except Exception as exc:  # pragma: no cover - defensive safeguard
-            fallback = build_fallback_response(reason="llm_failure")
-            fallback_metadata = fallback.get("metadata", {})
-            fallback_metadata.update({"error": str(exc), **metadata})
-            fallback["metadata"] = fallback_metadata
+            fallback = handle_llm_exception(exc, metadata)
             return {"triggered": True, **fallback}
 
     # ------------------------------------------------------------------
@@ -84,14 +87,54 @@ class RequestHandler:
         if self.client is None:
             return self._simulate_llm_response(payload)
 
-        request_body = {
-            "model": self.client.model_name,
-            "timeout_ms": self.client.timeout_ms,
-            "user_input": payload.user_input,
-            "context": payload.context_snippets,
-            "metadata": payload.metadata,
+        messages = self._build_messages(payload)
+        logger.debug("Dispatching LLM messages: %s", messages)
+        return self.client.complete({"messages": messages})
+
+    def _build_messages(self, payload: LLMIntentRequest) -> List[Dict[str, str]]:
+        system_prompt = os.getenv(
+            "OPENAI_SYSTEM_PROMPT",
+            "You are an intent classifier for an e-commerce assistant. Respond in JSON.",
+        )
+
+        user_context = []
+        if payload.context_snippets:
+            snippet_block = "\n".join(f"- {snippet}" for snippet in payload.context_snippets)
+            user_context.append(f"Context:\n{snippet_block}")
+
+        if payload.metadata:
+            user_context.append(f"Metadata: {payload.metadata}")
+
+        user_payload = {
+            "rule_intent": payload.rule_intent,
+            "action_code": payload.action_code,
+            "top_confidence": payload.top_confidence,
+            "next_best_confidence": payload.next_best_confidence,
         }
-        return self.client.complete(request_body)
+
+        instruction = (
+            "Classify the user request. Respond with a JSON object containing keys "
+            "intent, intent_category, action_code, confidence (0-1), reasoning, "
+            "processing_time_ms."
+        )
+
+        user_message = "\n\n".join(
+            filter(
+                None,
+                [
+                    instruction,
+                    f"User: {payload.user_input}",
+                    "Additional signals:",
+                    json.dumps(user_payload, ensure_ascii=False),
+                    "\n".join(user_context) if user_context else None,
+                ],
+            )
+        )
+
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ]
 
     def _simulate_llm_response(self, payload: LLMIntentRequest) -> Dict[str, Any]:
         """Generate a deterministic stand-in response when no LLM is wired up."""
