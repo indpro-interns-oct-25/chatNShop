@@ -4,6 +4,68 @@ A **100% Production-Ready** hybrid intent classification system for e-commerce, 
 
 ## 🚀 Quick Start
 
+### **Development Setup**
+
+**One-Command Development:**
+```bash
+# Start development environment (Qdrant + API with hot-reload)
+./dev.sh
+```
+
+**Manual Development Setup:**
+```bash
+# Start Qdrant only (for development)
+docker-compose up qdrant -d
+
+# Start API in development mode
+source venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**Development Features:**
+- ✅ **Hot Reload** - Code changes auto-restart server
+- ✅ **Qdrant Available** - Vector database for testing
+- ✅ **Fast Startup** - No Docker build needed
+- ✅ **Debug Mode** - Detailed error messages
+- ✅ **Live Testing** - Test changes immediately
+
+**Stop Development:**
+```bash
+# Stop API only (Ctrl+C in terminal)
+# Stop Qdrant (after Ctrl+C)
+docker-compose down
+
+# Or use cleanup script
+./dev-cleanup.sh
+```
+
+**Important:** Ctrl+C only stops the API server. Qdrant keeps running in the background.
+
+### **One-Command Production Setup**
+
+For production deployment, use Docker Compose:
+
+```bash
+# Start everything (Qdrant + API)
+./start.sh
+
+# Stop everything
+./stop.sh
+```
+
+**What gets started:**
+- ✅ **Qdrant Vector Database** (port 6333)
+- ✅ **Intent Classification API** (port 8000)
+- ✅ **Health Checks** (automatic)
+- ✅ **Auto-restart** (production-ready)
+- ✅ **Volume Persistence** (data survives restarts)
+
+**Access Points:**
+- **API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health
+- **Qdrant**: http://localhost:6333
+
 ### Service Architecture
 The system uses a **hybrid architecture** combining multiple approaches for optimal performance:
 
@@ -366,13 +428,25 @@ MIN_DIFFERENCE_THRESHOLD = 0.05  # Minimum gap between top results
 
 ### Production Deployment
 
-**Docker Deployment:**
+**One-Command Setup:**
 ```bash
-# Build Docker image
-docker build -t chatnshop-intent .
+# Start everything (Qdrant + API)
+./start.sh
 
-# Run container
-docker run -p 8000:8000 chatnshop-intent
+# Stop everything
+./stop.sh
+```
+
+**Manual Docker Compose:**
+```bash
+# Start services
+docker-compose up --build -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
 ```
 
 **Environment Variables:**
