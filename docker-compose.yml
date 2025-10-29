@@ -1,7 +1,9 @@
 version: '3.8'
 
 services:
+  # ==============================
   # Qdrant Vector Database
+  # ==============================
   qdrant:
     image: qdrant/qdrant:latest
     container_name: chatnshop-qdrant
@@ -15,12 +17,16 @@ services:
       - QDRANT__SERVICE__GRPC_PORT=6334
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
-      interval: 30s
+      # ✅ Fixed endpoint to /healthz (new version uses this)
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 20s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 30s
 
+  # ==============================
   # Intent Classification API
+  # ==============================
   intent-api:
     build: .
     container_name: chatnshop-intent-api
@@ -39,10 +45,14 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 20s
       timeout: 10s
-      retries: 3
+      retries: 10
+      start_period: 40s
 
+# ==============================
+# Persistent Storage
+# ==============================
 volumes:
   qdrant_storage:

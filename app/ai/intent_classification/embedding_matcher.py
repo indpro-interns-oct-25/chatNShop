@@ -9,25 +9,27 @@ import numpy as np
 from sentence_transformers import SentenceTransformer, util
 from typing import List, Dict, Any
 
-# --- THIS IS THE FIX ---
+# --- FIXED IMPORTS ---
 from app.ai.intent_classification.keyword_matcher import match_keywords
+from app.ai.llm_intent.qdrant_cache import store_vector
 # --- END FIX ---
 
 class EmbeddingMatcher:
     """
     A class-based wrapper for the functional embedding matcher.
     """
+
     def __init__(self, model_name='all-MiniLM-L6-v2'):
         """
         Initializes the matcher, loads the model, and pre-computes embeddings.
         """
         print(f"🔄 Loading model '{model_name}'...")
         start_time = time.time()
-        
+
         self.model = SentenceTransformer(model_name)
         self.intent_examples = INTENT_EXAMPLES
         self.intent_embeddings = self._precompute_embeddings()
-        
+
         print(f"✅ EmbeddingMatcher ready. Model loaded in {time.time() - start_time:.2f}s")
 
     def _precompute_embeddings(self) -> Dict[str, Any]:
@@ -40,54 +42,61 @@ class EmbeddingMatcher:
     def search(self, query: str, threshold: float = 0.60) -> List[Dict]:
         """
         Matches user query to the closest intent using embeddings.
-        Returns a list of all intents and their scores with enhanced error handling.
+        Includes Qdrant storage for analytics and caching.
         """
         try:
-            # Enhanced query preprocessing
             if not query or not query.strip():
                 return []
-            
-            # Clean and normalize query
+
             clean_query = query.strip().lower()
-            if len(clean_query) < 2:  # Too short to be meaningful
+            if len(clean_query) < 2:
                 return []
-            
+
             query_emb = self.model.encode(clean_query, convert_to_tensor=True)
             results = []
 
-            # Compute similarity across all intents
+            # Compute similarity across intents
             for intent, ref_emb in self.intent_embeddings.items():
                 if ref_emb is not None:
                     sim = util.cos_sim(query_emb, ref_emb).max().item()
-                    # Only include results above minimum threshold
-                    if sim >= 0.1:  # Very low threshold to catch edge cases
+                    if sim >= 0.1:
                         results.append({
-                            "id": intent, 
+                            "id": intent,
                             "intent": intent,
                             "score": round(sim, 4),
                             "source": "embedding",
                             "query": clean_query
                         })
 
-            # Sort by score
             results.sort(key=lambda x: x['score'], reverse=True)
+
+            # ✅ Store best match to Qdrant
+            if results:
+                best = results[0]
+                status = "CONFIDENT" if best["score"] >= threshold else "FALLBACK_BELOW_THRESHOLD"
+                store_vector(
+                    intent=best["intent"],
+                    vector=query_emb.tolist(),
+                    confidence=best["score"],
+                    status=status,
+                    variant="A",
+                    query=clean_query
+                )
+
             return results
 
         except Exception as e:
             print(f"❌ Error during embedding matching: {e}")
-            # Return a generic search result as fallback
             return [{
                 "id": "SEARCH_PRODUCT",
-                "intent": "SEARCH_PRODUCT", 
+                "intent": "SEARCH_PRODUCT",
                 "score": 0.1,
                 "source": "embedding_fallback",
                 "error": str(e)
             }]
 
-# -------------------------------------------------------------
-# (All of your original data/functions remain below)
-# -------------------------------------------------------------
 
+# --- Intent examples used for embeddings ---
 INTENT_EXAMPLES = {
     "SEARCH": [
         "find this item", "show me products", "search for shoes", "look up phone covers",
@@ -112,49 +121,15 @@ INTENT_EXAMPLES = {
     ],
 }
 
-# -------------------------------------------------------------
-# Standalone Test Block (for running this file directly)
-# -------------------------------------------------------------
-
-def keyword_fallback_test(user_query):
-    """
-    (For standalone testing only)
-    """
-    try:
-        kw_results = match_keywords(user_query, top_n=1)
-        if kw_results:
-            return kw_results[0].get("intent")
-        return None
-    except Exception as e:
-        print(f"⚠️ Keyword fallback test failed: {e}")
-        return None
-
+# --- Standalone test block ---
 if __name__ == "__main__":
-    print("\n🚀 Testing Embedding Matcher (standalone)...\n")
-    
     matcher = EmbeddingMatcher()
-    
     while True:
-        user_query = input("🗣️  User Query (or 'exit'): ").strip()
+        user_query = input("🗣️  Query: ")
         if user_query.lower() == "exit":
-            print("👋 Exiting matcher.")
             break
-
-        start = time.time()
-        search_results = matcher.search(user_query)
-        latency = (time.time() - start) * 1000
-
-        if search_results:
-            print(f"✅ Top Match: {search_results[0]['intent']} (Score: {search_results[0]['score']:.4f})")
-            
-            if search_results[0]['score'] < 0.6:
-                print("--- Low confidence, testing keyword fallback ---")
-                kw_intent = keyword_fallback_test(user_query)
-                if kw_intent:
-                    print(f"🔁 Fallback found: {kw_intent}")
-                else:
-                    print("... Fallback found no match.")
+        results = matcher.search(user_query)
+        if results:
+            print(f"✅ {results[0]}")
         else:
-            print(f"⚠️ No match found.")
-
-        print(f"⏱️  Latency: {latency:.2f} ms\n")
+            print("⚠️ No match found.")

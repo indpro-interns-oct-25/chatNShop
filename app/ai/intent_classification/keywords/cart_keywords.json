@@ -145,7 +145,7 @@
       "remove from wishlist", "delete from wishlist", "remove favourite", "unwish", "remove bookmark",
       "delete favourite", "discard from wishlist", "remove from favourites", "unmark item", "remove saved item",
       "delete from favourites", "remove from saved items", "remove wishlist item", "remove this item from wishlist", "delete saved product",
-      "unfavourite item", "remove from wish list", "delete chosen item", "remove selected product", "remove bookmarked item"
+      "unfavourite item", "remove from wish list", "delete chosen item", "remove selected product", "remove bookmarked item","remove shoes from my cart"
     ]
   },
   "VIEW_WISHLIST": {
