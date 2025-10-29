@@ -16,6 +16,7 @@ import uvicorn
 from app.api.v1 import intent
 from app.ai.intent_classification.decision_engine import get_intent_classification
 from app.api.v1.intent import router as intent_router
+from app.services import classify_intent as run_intent_pipeline
 print("Successfully imported Decision Engine.")
 
 # --- Qdrant Client Import ---

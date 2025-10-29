@@ -12,7 +12,8 @@ from app.schemas.llm_intent import LLMIntentRequest
 from .confidence_calibrator import TriggerContext, should_trigger_llm
 from .entity_extractor import INTENT_CATEGORIES
 from .error_handler import handle_llm_exception
-from .openai_client import CircuitBreakerOpenError, OpenAIClient
+from .openai_client import OpenAIClient
+from app.core.circuit_breaker import CircuitBreakerOpenError
 from .response_parser import LLMIntentResponse as ParsedLLMResponse, parse_llm_response
 
 
@@ -88,8 +89,9 @@ class RequestHandler:
             return self._simulate_llm_response(payload)
 
         messages = self._build_messages(payload)
-        logger.debug("Dispatching LLM messages: %s", messages)
-        return self.client.complete({"messages": messages})
+        client_payload = self._prepare_client_payload(payload, messages)
+        logger.debug("Dispatching LLM payload: %s", client_payload)
+        return self.client.complete(client_payload)
 
     def _build_messages(self, payload: LLMIntentRequest) -> List[Dict[str, str]]:
         system_prompt = os.getenv(
@@ -150,6 +152,26 @@ class RequestHandler:
             "action_code": action_code,
             "confidence": confidence,
             "reasoning": "Simulated LLM output (no API client configured)",
+        }
+
+    def _prepare_client_payload(
+        self,
+        payload: LLMIntentRequest,
+        messages: List[Dict[str, str]],
+    ) -> Dict[str, Any]:
+        """Construct the OpenAI client payload with required diagnostics."""
+
+        metadata_block: Dict[str, Any] = dict(payload.metadata or {})
+        metadata_block.setdefault("rule_intent", payload.rule_intent)
+        metadata_block.setdefault("action_code", payload.action_code)
+        metadata_block.setdefault("top_confidence", payload.top_confidence)
+        metadata_block.setdefault("next_best_confidence", payload.next_best_confidence)
+
+        return {
+            "user_input": payload.user_input,
+            "context": list(payload.context_snippets or []),
+            "metadata": metadata_block,
+            "messages": messages,
         }
 
     @staticmethod

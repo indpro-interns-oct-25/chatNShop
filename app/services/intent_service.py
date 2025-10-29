@@ -7,7 +7,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from app.ai.intent_classification.decision_engine import get_intent_classification
-from app.ai.llm_intent.openai_client import CircuitBreakerOpenError
+from app.core.circuit_breaker import CircuitBreakerOpenError
 from app.ai.llm_intent.trigger_manager import LLMTriggerManager
 from app.monitoring.metrics import log_latency
 from app.schemas.llm_intent import LLMIntentRequest

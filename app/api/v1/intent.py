@@ -8,7 +8,8 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.ai.llm_intent.openai_client import OpenAIClient, CircuitBreakerOpenError
+from app.ai.llm_intent.openai_client import OpenAIClient
+from app.core.circuit_breaker import CircuitBreakerOpenError
 from app.ai.llm_intent.request_handler import RequestHandler
 from app.schemas.llm_intent import LLMIntentRequest, LLMIntentResponse
 

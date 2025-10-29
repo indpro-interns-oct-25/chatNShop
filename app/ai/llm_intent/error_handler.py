@@ -8,7 +8,7 @@ from typing import Any, Dict
 from openai import APIConnectionError, APIError, APITimeoutError, RateLimitError
 
 from .fallback_manager import build_fallback_response
-from .openai_client import CircuitBreakerOpenError
+from app.core.circuit_breaker import CircuitBreakerOpenError
 
 
 logger = logging.getLogger("app.llm_intent.error_handler")

@@ -8,9 +8,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any, Dict, Optional
 
-from app.ai.llm_intent.openai_client import OpenAIClient, CircuitBreakerOpenError
+from app.ai.llm_intent.openai_client import OpenAIClient
 from app.ai.llm_intent.request_handler import RequestHandler
-from app.core.circuit_breaker import CircuitBreaker
+from app.core.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
 from app.monitoring.metrics import log_latency
 from app.schemas.llm_intent import LLMIntentRequest
 from app.utils.retry_logic import RetryExceededError, retry_operation
@@ -31,7 +31,21 @@ def _build_handler() -> RequestHandler:
         return RequestHandler()
 
     try:
-        client = OpenAIClient(api_key=api_key)
+        model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        temperature = float(os.getenv("OPENAI_TEMPERATURE", 0.2))
+        timeout_seconds = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "2.5"))
+        timeout_ms = int(max(timeout_seconds, 0.1) * 1000)
+
+        client = OpenAIClient(
+            api_key=api_key,
+            model_name=model_name,
+            timeout_ms=timeout_ms,
+            temperature=temperature,
+            max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", 600)),
+            max_retries=int(os.getenv("OPENAI_MAX_RETRIES", 3)),
+            backoff_factor=float(os.getenv("OPENAI_RETRY_BACKOFF_BASE", 0.75)),
+            max_backoff_seconds=float(os.getenv("OPENAI_RETRY_BACKOFF_MAX", 8.0)),
+        )
         return RequestHandler(client)
     except Exception as exc:  # pragma: no cover - defensive
         _logger.exception("Failed to initialize OpenAI client: %s", exc)
