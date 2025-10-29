@@ -1,3 +1,4 @@
+# Removed old config_manager import - using new implementation below
 import os
 import re
 from functools import lru_cache

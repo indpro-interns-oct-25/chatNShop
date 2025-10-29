@@ -1,58 +1,112 @@
 """
 Decision Engine
 This file contains the main logic for the intent classification.
+Now integrated with config manager for dynamic configuration and A/B testing.
 """
 from typing import Any, Dict, List, Optional
 
-# --- THIS IS THE FIX ---
-# All imports must start with 'app.'
-from app.ai.config import PRIORITY_THRESHOLD, WEIGHTS
+# --- CONFIG MANAGER INTEGRATION ---
+# Import config manager for dynamic configuration
+from app.core.config_manager import CONFIG_CACHE, ACTIVE_VARIANT, switch_variant
+from app.ai.config import PRIORITY_THRESHOLD, WEIGHTS  # Fallback config
 from app.ai.intent_classification.keyword_matcher import KeywordMatcher
 from app.ai.intent_classification.embedding_matcher import EmbeddingMatcher
 from app.ai.intent_classification import confidence_threshold
-# --- END FIX ---
+# --- END CONFIG MANAGER INTEGRATION ---
 
 class DecisionEngine:
     """
     Orchestrates the hybrid search process.
+    Now supports dynamic configuration via config manager.
     """
     def __init__(self):
 
         """
         Initializes the Decision Engine and its constituent matchers.
+        Now uses config manager for dynamic configuration.
         """
         print("Initializing DecisionEngine...")
         self.keyword_matcher = KeywordMatcher()
         self.embedding_matcher = EmbeddingMatcher()
         
-        # Load settings from the config file
-        self.priority_threshold = PRIORITY_THRESHOLD
-        self.kw_weight = WEIGHTS["keyword"]
-        self.emb_weight = WEIGHTS["embedding"]
-        print("✅ DecisionEngine Initialized: Settings loaded from config.")
+        # Load settings from config manager (with fallback to static config)
+        self._load_config_from_manager()
+        print(f"✅ DecisionEngine Initialized: Settings loaded from config manager (variant: {ACTIVE_VARIANT})")
+    
+    def _load_config_from_manager(self):
+        """
+        Load configuration from config manager with fallback to static config.
+        """
+        try:
+            # Import here to get fresh values
+            from app.core.config_manager import CONFIG_CACHE, ACTIVE_VARIANT
+            
+            # Try to get rules from config manager
+            rules = CONFIG_CACHE.get('rules', {})
+            rule_sets = rules.get('rule_sets', {})
+            current_rules = rule_sets.get(ACTIVE_VARIANT, {})
+            
+            # Use config manager settings if available
+            if current_rules:
+                self.use_embedding = current_rules.get('use_embedding', True)
+                self.use_keywords = current_rules.get('use_keywords', True)
+                print(f"📋 Using config manager rules for variant {ACTIVE_VARIANT}: embedding={self.use_embedding}, keywords={self.use_keywords}")
+            else:
+                # Fallback to static config
+                self.use_embedding = True
+                self.use_keywords = True
+                self.priority_threshold = PRIORITY_THRESHOLD
+                self.kw_weight = WEIGHTS["keyword"]
+                self.emb_weight = WEIGHTS["embedding"]
+                print("📋 Using fallback static config")
+                
+        except Exception as e:
+            # Fallback to static config on any error
+            print(f"⚠️ Config manager error, using fallback: {e}")
+            self.use_embedding = True
+            self.use_keywords = True
+            self.priority_threshold = PRIORITY_THRESHOLD
+            self.kw_weight = WEIGHTS["keyword"]
+            self.emb_weight = WEIGHTS["embedding"]
 
     def search(self, query: str) -> Dict[str, Any]:
 
         """
         Executes the full hybrid search flow and evaluates confidence.
+        Now respects config manager settings for A/B testing.
         """
-        keyword_results = self.keyword_matcher.search(query)
-
-        # Apply the priority rule
-        if keyword_results and keyword_results[0]['score'] >= self.priority_threshold:
-
-            print(f"✅ Priority rule triggered. Returning high-confidence keyword match: {keyword_results[0]['id']}")
-            return self._finalize_output(
-                status="CONFIDENT_KEYWORD",
-                intent=keyword_results[0],
-                candidates=keyword_results,
-            )
-
-        # If rule not met, perform embedding search
-        embedding_results = self.embedding_matcher.search(query)
-
-        # Blend scores
-        blended_results = self._blend_results(keyword_results, embedding_results)
+        # Reload config in case it changed (for hot-reload)
+        self._load_config_from_manager()
+        
+        keyword_results = []
+        embedding_results = []
+        
+        # Use keyword matching if enabled
+        if self.use_keywords:
+            keyword_results = self.keyword_matcher.search(query)
+            
+            # Apply the priority rule (if keywords enabled)
+            if keyword_results and keyword_results[0]['score'] >= getattr(self, 'priority_threshold', PRIORITY_THRESHOLD):
+                print(f"✅ Priority rule triggered. Returning high-confidence keyword match: {keyword_results[0]['id']}")
+                return {
+                    "status": "CONFIDENT_KEYWORD",
+                    "intent": keyword_results[0],
+                    "config_variant": ACTIVE_VARIANT
+                }
+        
+        # Use embedding matching if enabled
+        if self.use_embedding:
+            embedding_results = self.embedding_matcher.search(query)
+        
+        # Blend results if both methods are enabled
+        if self.use_keywords and self.use_embedding:
+            blended_results = self._blend_results(keyword_results, embedding_results)
+        elif self.use_keywords and keyword_results:
+            blended_results = keyword_results
+        elif self.use_embedding and embedding_results:
+            blended_results = embedding_results
+        else:
+            blended_results = []
 
         if not blended_results:
 
@@ -64,38 +118,36 @@ class DecisionEngine:
                 embedding_results_lower = [r for r in embedding_results if r['score'] >= 0.3]
                 if embedding_results_lower:
                     print(f"✅ Fallback found embedding match with lower threshold")
-                    return self._finalize_output(
-                        status="FALLBACK_EMBEDDING",
-                        intent=embedding_results_lower[0],
-                        candidates=embedding_results_lower,
-                        trigger_reason="embedding_low_confidence",
-                    )
+                    return {
+                        "status": "FALLBACK_EMBEDDING",
+                        "intent": embedding_results_lower[0],
+                        "config_variant": ACTIVE_VARIANT
+                    }
             
             # Fallback 2: Lower keyword threshold
             if keyword_results:
                 keyword_results_lower = [r for r in keyword_results if r['score'] >= 0.3]
                 if keyword_results_lower:
                     print(f"✅ Fallback found keyword match with lower threshold")
-                    return self._finalize_output(
-                        status="FALLBACK_KEYWORD",
-                        intent=keyword_results_lower[0],
-                        candidates=keyword_results_lower,
-                        trigger_reason="keyword_low_confidence",
-                    )
+                    return {
+                        "status": "FALLBACK_KEYWORD",
+                        "intent": keyword_results_lower[0],
+                        "config_variant": ACTIVE_VARIANT
+                    }
             
             # Fallback 3: Generic search intent
             print(f"⚠ No specific match found, returning generic search intent")
-            return self._finalize_output(
+            return self._finalize_output{
                 status="FALLBACK_GENERIC",
                 intent={
                     "id": "SEARCH_PRODUCT",
                     "intent": "SEARCH_PRODUCT",
                     "score": 0.1,
                     "source": "fallback",
-                    "reason": "generic_search_fallback",
+                    "reason": "generic_search_fallback"
                 },
-                trigger_reason="no_match_found",
-            )
+                "config_variant": ACTIVE_VARIANT
+            }
 
         # Evaluate final confidence
         is_confident, reason = confidence_threshold.is_confident(blended_results)
@@ -103,12 +155,11 @@ class DecisionEngine:
         if is_confident:
 
             print(f"✅ Blended result is confident. Reason: {reason}")
-            return self._finalize_output(
-                status=reason,
-                intent=blended_results[0],
-                candidates=blended_results,
-            )
-
+            return {
+                "status": reason,
+                "intent": blended_results[0],
+                "config_variant": ACTIVE_VARIANT
+            }
         else:
             # Enhanced fallback for low confidence results
             print(f"⚠ Blended result is NOT confident. Reason: {reason}")
@@ -116,12 +167,11 @@ class DecisionEngine:
             # If we have any results, return the best one with fallback status
             if blended_results and blended_results[0]['score'] >= 0.1:
                 print(f"✅ Returning best available result as fallback")
-                return self._finalize_output(
-                    status=f"FALLBACK_{reason}",
-                    intent=blended_results[0],
-                    candidates=blended_results,
-                    trigger_reason=reason,
-                )
+                return {
+                    "status": f"FALLBACK_{reason}",
+                    "intent": blended_results[0],
+                    "config_variant": ACTIVE_VARIANT
+                }
             
             # Final fallback to generic search
             print(f"⚠ No suitable results, returning generic search")
@@ -132,153 +182,94 @@ class DecisionEngine:
                     "intent": "SEARCH_PRODUCT",
                     "score": 0.1,
                     "source": "fallback",
-                    "reason": "generic_search_fallback",
+                    "reason": "generic_search_fallback"
                 },
-                trigger_reason="no_suitable_results",
-            )
-
-    def _finalize_output(
-        self,
-        *,
-        status: str,
-        intent: Dict[str, Any],
-        candidates: Optional[List[Dict[str, Any]]] = None,
-        trigger_reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Normalize the decision engine payload for downstream consumers."""
-
-        normalized_candidates: List[Dict[str, Any]] = []
-        if candidates:
-            # Ensure we don't mutate the caller-provided list.
-            normalized_candidates = [dict(candidate) for candidate in candidates]
-
-        if not normalized_candidates and intent:
-            normalized_candidates = [dict(intent)]
-
-        # Guarantee the resolved intent is the first candidate.
-        if normalized_candidates and normalized_candidates[0].get("id") != intent.get("id"):
-            normalized_candidates.insert(0, dict(intent))
-
-        top_score = normalized_candidates[0].get("score", 0.0) if normalized_candidates else intent.get("score", 0.0) or 0.0
-        next_score = normalized_candidates[1].get("score", 0.0) if len(normalized_candidates) > 1 else 0.0
-
-        payload = {
-            "status": status,
-            "intent": intent,
-            "candidates": normalized_candidates,
-            "top_confidence": round(float(top_score), 4),
-            "next_best_confidence": round(float(next_score), 4),
-            "confidence_gap": round(float(top_score - next_score), 4),
-            "resolved_intent": intent.get("intent") or intent.get("id"),
-            "resolved_action_code": intent.get("action") or intent.get("id"),
-            "is_fallback": status.startswith("FALLBACK"),
-            "needs_llm_review": not status.upper().startswith("CONFIDENT"),
-        }
-
-        if trigger_reason:
-            payload["trigger_reason"] = trigger_reason
-
-        return payload
+                "config_variant": ACTIVE_VARIANT
+            }
 
     def _blend_results(self, kw_results: List, emb_results: List) -> List[Dict]:
         """
         Implements sophisticated weighted scoring to combine results from both methods.
-        Includes conflict resolution and fallback mechanisms.
         """
-        combined = {}
+        if not kw_results and not emb_results:
+            return []
         
-        # Helper to add results with enhanced conflict resolution
-        def add_result(result, score_type, weight):
-            intent_id = result.get('id')
-            if not intent_id:
-                return
-            
-            score = result.get('score', 0) * weight
-            if intent_id not in combined:
-                combined[intent_id] = {
-                    'kw_score': 0, 
-                    'emb_score': 0, 
-                    'details': {},
-                    'match_count': 0,
-                    'max_individual_score': 0
-                }
-            
-            combined[intent_id][score_type] = score
-            combined[intent_id]['details'] = result
-            combined[intent_id]['match_count'] += 1
-            combined[intent_id]['max_individual_score'] = max(
-                combined[intent_id]['max_individual_score'], 
-                result.get('score', 0)
-            )
-
-        # Add keyword results
-        for res in kw_results:
-            add_result(res, 'kw_score', self.kw_weight)
-            
-        # Add embedding results
-        for res in emb_results:
-            add_result(res, 'emb_score', self.emb_weight)
-
-        # Enhanced scoring with conflict resolution
-        final_results = []
-        for intent_id, data in combined.items():
-            # Base weighted score
-            base_score = data['kw_score'] + data['emb_score']
-            
-            # Bonus for multiple matches (consensus)
-            consensus_bonus = 0.1 if data['match_count'] > 1 else 0
-            
-            # Bonus for high individual scores (confidence)
-            confidence_bonus = min(0.2, data['max_individual_score'] * 0.2)
-            
-            # Final score with bonuses
-            final_score = round(base_score + consensus_bonus + confidence_bonus, 4)
-            
-            if final_score > 0:
-                final_obj = data['details'].copy()
-                final_obj['id'] = intent_id
-                final_obj['intent'] = intent_id
-                final_obj['score'] = final_score
-                final_obj['blend_scores'] = {
-                    'kw': data['kw_score'], 
-                    'emb': data['emb_score'],
-                    'consensus_bonus': consensus_bonus,
-                    'confidence_bonus': confidence_bonus
-                }
-                final_obj['match_count'] = data['match_count']
-                final_obj['max_individual_score'] = data['max_individual_score']
-                final_results.append(final_obj)
+        if not kw_results:
+            return emb_results
         
-        # Sort by final score with tie-breaking
-        final_results.sort(key=lambda x: (x['score'], x['match_count'], x['max_individual_score']), reverse=True)
-        return final_results
+        if not emb_results:
+            return kw_results
+        
+        # Create a mapping of intent IDs to their scores from both methods
+        intent_scores = {}
+        
+        # Process keyword results
+        for result in kw_results:
+            intent_id = result.get('id', result.get('intent', 'unknown'))
+            score = result.get('score', 0.0)
+            intent_scores[intent_id] = {
+                'keyword_score': score,
+                'keyword_result': result,
+                'embedding_score': 0.0,
+                'embedding_result': None
+            }
+        
+        # Process embedding results
+        for result in emb_results:
+            intent_id = result.get('id', result.get('intent', 'unknown'))
+            score = result.get('score', 0.0)
+            
+            if intent_id in intent_scores:
+                intent_scores[intent_id]['embedding_score'] = score
+                intent_scores[intent_id]['embedding_result'] = result
+            else:
+                intent_scores[intent_id] = {
+                    'keyword_score': 0.0,
+                    'keyword_result': None,
+                    'embedding_score': score,
+                    'embedding_result': result
+                }
+        
+        # Calculate blended scores
+        blended_results = []
+        kw_weight = getattr(self, 'kw_weight', WEIGHTS["keyword"])
+        emb_weight = getattr(self, 'emb_weight', WEIGHTS["embedding"])
+        
+        for intent_id, scores in intent_scores.items():
+            # Weighted average of scores
+            blended_score = (scores['keyword_score'] * kw_weight + 
+                           scores['embedding_score'] * emb_weight)
+            
+            # Use the result with higher individual score as base
+            if scores['keyword_score'] > scores['embedding_score']:
+                base_result = scores['keyword_result']
+            else:
+                base_result = scores['embedding_result']
+            
+            if base_result:
+                blended_result = base_result.copy()
+                blended_result['score'] = blended_score
+                blended_result['source'] = 'blended'
+                blended_result['keyword_score'] = scores['keyword_score']
+                blended_result['embedding_score'] = scores['embedding_score']
+                blended_results.append(blended_result)
+        
+        # Sort by blended score
+        blended_results.sort(key=lambda x: x['score'], reverse=True)
+        return blended_results
 
 
-# -----------------------------------------------------------------
-# --- SINGLETON INSTANCE and PUBLIC FUNCTION ---
-# -----------------------------------------------------------------
-try:
-    _engine_instance = DecisionEngine()
-except Exception as e:
-    print(f"🛑 CRITICAL: Failed to initialize DecisionEngine singleton: {e}")
-    _engine_instance = None
+# Global instance for the main API
+_decision_engine = None
 
 def get_intent_classification(query: str) -> Dict[str, Any]:
     """
-    This is the main function imported by the FastAPI app.
+    Main function for intent classification.
+    Creates a DecisionEngine instance if needed and processes the query.
     """
-    if _engine_instance is None:
-        raise RuntimeError("DecisionEngine is not initialized. Check startup logs for errors.")
-        
-    if query == "warm up":
-        print("DecisionEngine warmup call received.")
-        return {"status": "warmed_up"}
-        
-    # Run the search
-    result = _engine_instance.search(query)
+    global _decision_engine
     
-    # Standardize output
-    result['classification_status'] = result.pop('status', 'UNKNOWN')
-    result['source'] = 'hybrid_decision_engine'
+    if _decision_engine is None:
+        _decision_engine = DecisionEngine()
     
-    return result
+    return _decision_engine.search(query)

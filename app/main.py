@@ -15,7 +15,10 @@ import uvicorn
 
 from app.api.v1 import intent
 from app.ai.intent_classification.decision_engine import get_intent_classification
-from app.services.intent_service import classify_intent as run_intent_pipeline
+from app.api.v1.intent import router as intent_router
+print("Successfully imported Decision Engine.")
+
+# --- Qdrant Client Import ---
 from qdrant_client import QdrantClient, models
 
 
@@ -148,7 +151,12 @@ async def classify_intent(user_input: ClassificationInput) -> Dict[str, Any]:
         )
 
 
-app.include_router(intent.router)
+# Include API routers
+app.include_router(intent_router)
+
+# app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"])
+# app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
+# app.include_router(experiments.router, prefix="/api/v1/experiments", tags=["Experiments"])
 
 
 @app.exception_handler(Exception)
