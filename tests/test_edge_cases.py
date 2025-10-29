@@ -1,20 +1,14 @@
 # tests/test_edge_cases.py
-from app.ai.intent_classification.keyword_matcher import KeywordMatcher
+from app.ai.intent_classification.keyword_matcher import match_keywords
 
-def test_empty_query(tmp_keywords_dir):
-    m = KeywordMatcher(keywords_dir=tmp_keywords_dir)
-    out = m.match_intent("")
-    assert isinstance(out, dict)
-    assert "action_code" in out
+def test_empty_input():
+    assert match_keywords("") == []
 
-def test_special_chars_only(tmp_keywords_dir):
-    m = KeywordMatcher(keywords_dir=tmp_keywords_dir)
-    q = "!@#$%^&*()_+{}:\"<>?~`"
-    out = m.match_intent(q)
-    assert isinstance(out, dict)
+def test_very_long_input():
+    text = "add to cart " * 1000
+    res = match_keywords(text)
+    assert res
 
-def test_very_long_query(tmp_keywords_dir):
-    m = KeywordMatcher(keywords_dir=tmp_keywords_dir)
-    q = "add to cart " * 5000
-    out = m.match_intent(q)
-    assert isinstance(out, dict)
+def test_special_symbols():
+    res = match_keywords("@@@@add#####cart$$$$")
+    assert res
