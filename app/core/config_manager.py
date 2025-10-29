@@ -6,7 +6,8 @@ import threading
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-CONFIG_DIR = os.path.join(os.path.dirname(__file__), "")
+CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'config')
+KEYWORDS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'app', 'ai', 'intent_classification', 'keywords')
 VERSIONS_DIR = os.path.join(CONFIG_DIR, "versions")
 os.makedirs(VERSIONS_DIR, exist_ok=True)
 
@@ -54,6 +55,8 @@ def load_all_configs():
     global CONFIG_CACHE
 
     print(f"🔄 Loading configuration variant: {ACTIVE_VARIANT}")
+    
+    # Load rules and other config files from config/ directory
     for filename in os.listdir(CONFIG_DIR):
         if filename.endswith(".json") and "_" not in filename:  # Base names only
             variant_file = get_variant_filename(filename, ACTIVE_VARIANT)
@@ -65,6 +68,20 @@ def load_all_configs():
             data = load_json_config(file_to_load)
             if data:
                 CONFIG_CACHE[filename.replace(".json", "")] = data
+    
+    # Load keywords from the actual keywords directory
+    if os.path.exists(KEYWORDS_DIR):
+        keywords_data = {}
+        for filename in os.listdir(KEYWORDS_DIR):
+            if filename.endswith(".json") and filename != "loader.py":
+                file_path = os.path.join(KEYWORDS_DIR, filename)
+                data = load_json_config(file_path)
+                if data:
+                    # Merge all keyword files into one
+                    keywords_data.update(data)
+        
+        if keywords_data:
+            CONFIG_CACHE["keywords"] = keywords_data
 
     print("✅ Configurations loaded successfully")
 
