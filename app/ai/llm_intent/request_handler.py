@@ -11,6 +11,9 @@ from .entity_extractor import INTENT_CATEGORIES
 from .fallback_manager import build_fallback_response
 from .openai_client import OpenAIClient
 from .response_parser import LLMIntentResponse as ParsedLLMResponse, parse_llm_response
+import logging
+
+logger = logging.getLogger("request_handler")
 
 
 class RequestHandler:
@@ -50,8 +53,11 @@ class RequestHandler:
             }
 
         try:
-            raw_result = self._invoke_llm(payload)
+            # Pass through OpenAI params from payload.metadata or use default
+            openai_opts = payload.metadata.get("openai", {}) if hasattr(payload, 'metadata') else {}
+            raw_result = self._invoke_llm(payload, **openai_opts)
             parsed: ParsedLLMResponse = parse_llm_response(raw_result)
+            logger.info(f"LLM intent result: {parsed}")
             return {
                 "triggered": True,
                 "intent": parsed.intent,
@@ -68,6 +74,7 @@ class RequestHandler:
                 },
             }
         except Exception as exc:  # pragma: no cover - defensive safeguard
+            logger.error(f"LLM call failed: {exc}")
             fallback = build_fallback_response(reason="llm_failure")
             fallback_metadata = fallback.get("metadata", {})
             fallback_metadata.update({"error": str(exc), **metadata})
@@ -78,7 +85,7 @@ class RequestHandler:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _invoke_llm(self, payload: LLMIntentRequest) -> Dict[str, Any]:
+    def _invoke_llm(self, payload: LLMIntentRequest, **opts) -> Dict[str, Any]:
         """Call the configured LLM client or fall back to simulation."""
 
         if self.client is None:
@@ -86,9 +93,10 @@ class RequestHandler:
 
         request_body = {
             "model": self.client.model_name,
-            "timeout_ms": self.client.timeout_ms,
-            "user_input": payload.user_input,
-            "context": payload.context_snippets,
+            "timeout_ms": getattr(self.client, "timeout", 30.0)*1000,
+            "messages": self.build_messages(payload),
+            "temperature": opts.get("temperature", self.client.temperature),
+            "max_tokens": opts.get("max_tokens", self.client.max_tokens),
             "metadata": payload.metadata,
         }
         return self.client.complete(request_body)
@@ -108,6 +116,12 @@ class RequestHandler:
             "confidence": confidence,
             "reasoning": "Simulated LLM output (no API client configured)",
         }
+
+    def build_messages(self, payload: LLMIntentRequest):
+        # Simple translation: just wrap user_input as user message
+        return [
+            {"role": "user", "content": payload.user_input}
+        ]
 
     @staticmethod
     def _infer_category(action_code: Optional[str]) -> str:
