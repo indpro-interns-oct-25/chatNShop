@@ -25,7 +25,7 @@ import json
 import sys
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, cast
 
 # Add parent directory to path for imports when running standalone
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -42,10 +42,10 @@ logger = logging.getLogger(__name__)
 # ✅ Import from CNS-8 (Keyword Dictionaries aligned with CNS-7 action codes)
 try:
     from .keywords.loader import load_keywords
-    from ..queue_producer import IntentQueueProducer, IntentScore
+    from ..queue_producer import IntentQueueProducer, IntentScore, RuleBasedResult
 except ImportError:
     from keywords.loader import load_keywords
-    from app.ai.queue_producer import IntentQueueProducer, IntentScore
+    from app.ai.queue_producer import IntentQueueProducer, IntentScore, RuleBasedResult
 
 # Initialize queue producer
 _queue_producer = IntentQueueProducer()
@@ -124,6 +124,12 @@ def calculate_confidence(user_input, keywords):
         return 0.95
 
 
+def find_matched_keywords_for_action(user_input_lower: str, keywords: List[str]) -> List[str]:
+    """Return the list of keywords that matched in the user_input (case-insensitive)."""
+    matched = [k for k in keywords if k.lower() in user_input_lower]
+    return matched
+
+
 def fallback_behavior(user_input):
     """Handle unclear or low-confidence user inputs."""
     print(f"[Fallback] Input unclear or low confidence: '{user_input}'")
@@ -173,8 +179,8 @@ def detect_intent(user_input: str, metadata: Optional[Dict[str, Any]] = None) ->
     }
 
     def _format_intent_scores(intents_dict: Dict[str, float]) -> List[IntentScore]:
-        return [{"intent": float(score), "score": float(score)} 
-                for _, score in intents_dict.items()]
+        return [{"intent": action_code, "score": float(score)}
+                for action_code, score in intents_dict.items()]
 
     # Case 1: No high-confidence intents → UNCLEAR
     if not high_conf_intents:
@@ -182,11 +188,26 @@ def detect_intent(user_input: str, metadata: Optional[Dict[str, Any]] = None) ->
         
         try:
             # Queue for further processing
+            # Build rule_based_result shape per spec
+            matched_keywords = []
+            for ac, kws in INTENT_KEYWORDS.items():
+                matched_keywords.extend(find_matched_keywords_for_action(user_input_lower, kws))
+
+            rb_result = cast(dict, {
+                "action_code": "UNCLEAR",
+                "confidence": round(max(intent_confidences.values()) if intent_confidences else 0.0, 2),
+                "matched_keywords": matched_keywords
+            })
+
             request_id = _queue_producer.publish_ambiguous_query(
                 query=user_input,
                 intent_scores=_format_intent_scores(intent_confidences),
                 priority=False,  # Unclear cases are not typically priority
-                metadata={"type": "unclear", **(metadata or {})}
+                metadata={"type": "unclear", **(metadata or {})},
+                session_id=(metadata or {}).get('session_id'),
+                user_id=(metadata or {}).get('user_id'),
+                conversation_history=(metadata or {}).get('conversation_history'),
+                rule_based_result=cast(RuleBasedResult, rb_result)
             )
             logger.info(f"Queued unclear intent for processing with request_id={request_id}")
             
@@ -205,12 +226,27 @@ def detect_intent(user_input: str, metadata: Optional[Dict[str, Any]] = None) ->
         log_ambiguous_case(user_input, {"type": "multiple", "intents": high_conf_intents})
         
         try:
+            # Build rule_based_result for ambiguous case
+            matched_keywords = []
+            for ac in high_conf_intents.keys():
+                matched_keywords.extend(find_matched_keywords_for_action(user_input_lower, INTENT_KEYWORDS.get(ac, [])))
+
+            rb_result = cast(dict, {
+                "action_code": "AMBIGUOUS",
+                "confidence": round(max(high_conf_intents.values()), 2),
+                "matched_keywords": matched_keywords
+            })
+
             # Queue ambiguous case with priority
             request_id = _queue_producer.publish_ambiguous_query(
                 query=user_input,
                 intent_scores=_format_intent_scores(high_conf_intents),
                 priority=True,  # Ambiguous high-confidence cases are priority
-                metadata={"type": "ambiguous", **(metadata or {})}
+                metadata={"type": "ambiguous", **(metadata or {})},
+                session_id=(metadata or {}).get('session_id'),
+                user_id=(metadata or {}).get('user_id'),
+                conversation_history=(metadata or {}).get('conversation_history'),
+                rule_based_result=cast(RuleBasedResult, rb_result)
             )
             logger.info(f"Queued ambiguous intent for processing with request_id={request_id}")
             
