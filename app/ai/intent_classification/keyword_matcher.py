@@ -1,205 +1,349 @@
-# Removed old config_manager import - using new implementation below
+# app/ai/intent_classification/keyword_matcher.py
+"""
+KeywordMatcher - robust, test-friendly keyword matching for intent classification.
+
+Behavior:
+- Loads keyword definitions using app.ai.intent_classification.keywords.loader.load_keywords()
+  if available; otherwise loads JSON files from a local keywords/ folder.
+- Normalizes input text (removes/replaces symbols), tokenizes, and precompiles phrases and regexes.
+- Supports exact / regex / partial matches with scoring.
+- Returns a list of dicts with keys: id, intent, action, score, source, match_type, matched_text.
+- Includes fallback normalization for symbol-only inputs so tests like "@@@add##to###cart$$$" match.
+"""
+
+from __future__ import annotations
 import os
 import re
-from typing import Callable, Dict, List, Tuple, Optional, Union
+import time
+import json
 from functools import lru_cache
+from typing import Dict, List, Tuple, Any, Optional, Union
 
-# Normalization and loader imports
-from app.utils.text_processing import normalize_text
-from app.ai.intent_classification.keywords.loader import load_keywords
+# -----------------------
+# Try to import project utilities (safe fallbacks if not present)
+# -----------------------
+try:
+    from app.utils.text_processing import normalize_text as _external_normalize
+except Exception:
+    _external_normalize = None
 
-# Directory path for keyword JSONs
-KEYWORDS_DIR = os.path.join(os.path.dirname(__file__), "keywords")
+try:
+    from app.ai.intent_classification.keywords.loader import load_keywords as _external_loader
+except Exception:
+    _external_loader = None
 
-# Cache for loaded keywords
-_KEYWORDS_CACHE = None
+# -----------------------
+# Config / Globals
+# -----------------------
+KEYWORDS_FOLDER = os.path.join(os.path.dirname(__file__), "keywords")  # fallback folder
+_KEYWORDS_CACHE: Optional[Dict[str, Dict[str, Any]]] = None
+
+# -----------------------
+# Fallback normalize_text (used only if external not available)
+# -----------------------
+@lru_cache(maxsize=8192)
+def _normalize_text_local(text: str) -> str:
+    """Lightweight local normalizer with caching for speed."""
+    if not text:
+        return ""
+    s = text.lower()
+    # Expand common symbols to words to preserve meaning
+    # Replace runs of special symbols (one run -> one word)
+    s = re.sub(r'&+', ' and ', s)        # && -> 'and'
+    s = re.sub(r'\++', ' plus ', s)      # ++ -> 'plus'
+    s = re.sub(r'@+', ' at ', s)         # @@ -> 'at'
+    s = re.sub(r'#+', ' hash ', s)       # ## -> 'hash'
+    s = re.sub(r'\$+', ' dollar ', s)    # $$ -> 'dollar'
+    s = re.sub(r'%+', ' percent ', s)    # %% -> 'percent'
+    # Replace non-alphanumeric with spaces
+    s = re.sub(r'[^a-z0-9]', ' ', s)
+    # Collapse whitespace
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s
 
 
-class KeywordMatcher:
+def normalize_text(text: str) -> str:
+    """Wrapper normalization — prefer external if available."""
+    if _external_normalize:
+        try:
+            out = _external_normalize(text)
+            if out is not None and out.strip():
+                return out
+        except Exception:
+            pass
+    return _normalize_text_local(text or "")
+
+# -----------------------
+# Keyword loader (fallback)
+# -----------------------
+def _load_from_folder(folder: str) -> Dict[str, Dict[str, Any]]:
     """
-    A class-based wrapper for the functional keyword matcher.
+    Load keyword JSON files from folder.
+    Each file name (without extension) becomes the intent id (uppercased).
+    JSON structure per file: {"phrases": ["..."], "regex": ["..."], "priority": 1}
     """
-    def __init__(self):
-        """
-        Initializes the matcher and ensures keywords are loaded.
-        """
-        _get_cached_keywords()
-        print("✅ KeywordMatcher initialized and keywords loaded.")
+    data: Dict[str, Dict[str, Any]] = {}
+    if not os.path.isdir(folder):
+        return data
 
-    def search(self, query: str) -> List[Dict]:
-        """
-        Runs the keyword matching logic and returns a list of results.
-        """
-        results = match_keywords(query, top_n=3)
-        
-        # Adapt output for DecisionEngine
-        adapted_results = []
-        for res in results:
-            intent_id = res.get("intent")
-            if intent_id:
-                adapted_results.append({
-                    "id": intent_id, 
-                    "intent": intent_id,
-                    "score": res.get("score", 0.0),
-                    "source": "keyword",
-                    "match_type": res.get("match_type"),
-                    "matched_text": res.get("matched_text")
-                })
-        return adapted_results
+    for fname in os.listdir(folder):
+        if not fname.lower().endswith(".json"):
+            continue
+        intent_id = os.path.splitext(fname)[0].upper()
+        path = os.path.join(folder, fname)
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+                entry = {
+                    "keywords": payload.get("phrases") or payload.get("keywords") or [],
+                    "regex": payload.get("regex") or payload.get("patterns") or [],
+                    "priority": int(payload.get("priority", 1))
+                }
+                data[intent_id] = entry
+        except Exception:
+            # silently skip invalid files
+            continue
+    return data
 
-# -----------------------------------------------------------------
-# (All of your original functions remain below, unchanged)
-# -----------------------------------------------------------------
+def load_keywords() -> Dict[str, Dict[str, Any]]:
+    """Public loader: prefer external loader if available, otherwise use folder loader."""
+    global _KEYWORDS_CACHE
+    if _KEYWORDS_CACHE is not None:
+        return _KEYWORDS_CACHE
 
+    if _external_loader:
+        try:
+            loaded = _external_loader()
+            if isinstance(loaded, dict) and loaded:
+                _KEYWORDS_CACHE = loaded
+                return _KEYWORDS_CACHE
+        except Exception:
+            pass
+
+    _KEYWORDS_CACHE = _load_from_folder(KEYWORDS_FOLDER)
+    return _KEYWORDS_CACHE
+
+# -----------------------
+# Preprocessing / Precompilation
+# -----------------------
+_PRECOMPILED: Dict[str, Dict[str, Any]] = {}
+_PRECOMPILED_READY = False
+
+def _precompile_keywords():
+    global _PRECOMPILED_READY, _PRECOMPILED
+    if _PRECOMPILED_READY:
+        return
+    keywords = load_keywords()
+    compiled: Dict[str, Dict[str, Any]] = {}
+    for intent, data in (keywords.items() if keywords else []):
+        kw_list = data.get("keywords", []) or []
+        regex_list = data.get("regex", []) or []
+        priority = int(data.get("priority", 1) or 1)
+        # Tokenize and normalize phrase keywords
+        tokenized_phrases: List[Tuple[str, ...]] = []
+        for p in kw_list:
+            if not isinstance(p, str):
+                continue
+            norm = _normalize_text_local(p)  # use local normalizer for phrase preprocessing
+            tokens = tuple(re.findall(r"\w+", norm))
+            if tokens:
+                tokenized_phrases.append(tokens)
+        # Compile regexes
+        compiled_regexes = []
+        for rx in regex_list:
+            try:
+                compiled_regexes.append(re.compile(rx, flags=re.IGNORECASE))
+            except re.error:
+                # skip invalid regex
+                continue
+        compiled[intent] = {
+            "phrases": tokenized_phrases,
+            "regex": compiled_regexes,
+            "priority": priority
+        }
+    _PRECOMPILED = compiled
+    _PRECOMPILED_READY = True
+
+# -----------------------
+# Scoring helpers
+# -----------------------
 def _score_exact() -> float:
     return 1.0
 
 def _score_partial(overlap: int, pattern_len: int, weight: float) -> float:
-    if pattern_len == 0:
+    if pattern_len <= 0:
         return 0.0
-    return round((overlap / pattern_len) * weight, 3)
+    base = 0.5
+    frac = overlap / pattern_len
+    return round(base + (0.5 * frac * weight), 3)
 
 def _score_regex(match_len: int, pattern_len: int, weight: float) -> float:
-    if pattern_len == 0:
+    if pattern_len <= 0:
         return 0.0
-    return round((match_len / pattern_len) * weight, 3)
+    frac = min(1.0, match_len / (pattern_len or 1))
+    return round(0.8 * frac * weight, 3)
 
-def _compile_pattern(pattern: str):
-    try:
-        return re.compile(pattern, re.IGNORECASE)
-    except re.error:
-        return None
-
-@lru_cache(maxsize=128)
+# -----------------------
+# Normalization + tokenization caching
+# -----------------------
+@lru_cache(maxsize=8192)
 def _normalize_and_tokenize(text: str) -> Tuple[str, Tuple[str, ...]]:
-    """Cache normalized text and tokens to avoid redundant processing."""
-    # Enhanced normalization for special characters
-    normalized = normalize_text(text)
-    
-    # Handle common special character patterns
-    normalized = re.sub(r'[!?.,;:]+', '', normalized)  # Remove punctuation
-    normalized = re.sub(r'[\'"]+', '', normalized)      # Remove quotes
-    normalized = re.sub(r'[-_]+', ' ', normalized)      # Replace hyphens/underscores with space
-    normalized = re.sub(r'[&]+', ' and ', normalized)    # Replace & with 'and'
-    normalized = re.sub(r'[+]+', ' plus ', normalized)   # Replace + with 'plus'
-    normalized = re.sub(r'[@]+', ' at ', normalized)     # Replace @ with 'at'
-    normalized = re.sub(r'[#]+', ' hash ', normalized)   # Replace # with 'hash'
-    normalized = re.sub(r'[$]+', ' dollar ', normalized) # Replace $ with 'dollar'
-    normalized = re.sub(r'[%]+', ' percent ', normalized) # Replace % with 'percent'
-    
-    # Clean up multiple spaces
-    normalized = re.sub(r'\s+', ' ', normalized).strip()
-    
-    tokens = tuple(re.findall(r"\w+", normalized))
-    return normalized, tokens
+    # IMPORTANT: use local normalizer here to avoid depending on external normalize_text
+    norm = _normalize_text_local(text or "")
+    # minor extra cleanup
+    norm = re.sub(r"['\"]+", "", norm)
+    norm = re.sub(r"[-_]+", " ", norm)
+    norm = re.sub(r"\s+", " ", norm).strip()
+    tokens = tuple(re.findall(r"\w+", norm))
+    return norm, tokens
 
-def _get_cached_keywords():
-    global _KEYWORDS_CACHE
-    if _KEYWORDS_CACHE is None:
-        _KEYWORDS_CACHE = load_keywords()
-    return _KEYWORDS_CACHE
-
+# -----------------------
+# Core match function
+# -----------------------
 def match_keywords(
     text: str,
     *,
-    normalize: Union[Callable[[str], str], None] = None,
-    top_n: int = 5,
-) -> List[Dict]:
-    if normalize is None:
-        normalize = normalize_text
-
-    raw = text.strip()
-    norm_text = normalize(raw)
-    if not norm_text:
+    top_n: int = 3
+) -> List[Dict[str, Union[str, float]]]:
+    """
+    Match text against keyword patterns and return a sorted list of matches.
+    Each result dict has: id, intent, action, score, source, match_type, matched_text
+    """
+    t0 = time.perf_counter()
+    if not text or not isinstance(text, str):
         return []
 
-    segments = re.split(r"\band\b|,|\.|!|\?|;", norm_text)
-    segments = [seg.strip() for seg in segments if seg.strip()]
+    # Ensure compiled patterns ready
+    _precompile_keywords()
+    compiled = _PRECOMPILED
 
-    keywords = _get_cached_keywords()
-    candidates: List[Tuple[float, Dict]] = []
-    
-    seg_data = []
-    for segment in segments:
-        seg_tokens = set(re.findall(r"\w+", segment))
-        seg_data.append((segment, seg_tokens))
+    # ---------------------------
+    # Robust normalization fallback logic (FINAL)
+    # ---------------------------
+    # Use the local normalizer for all matching/segmentation so it lines up with precompiled phrases
+    norm = _normalize_text_local(text or "")
 
-    for segment, seg_tokens in seg_data:
-        best_match_for_segment = None
-        best_score = 0.0
+    def _has_alnum(s: str) -> bool:
+        return bool(re.search(r"[A-Za-z0-9]", s or ""))
 
-        for intent, intent_data in keywords.items():
-            priority = intent_data.get("priority", 1)
-            keyword_list = intent_data.get("keywords", [])
-            weight = 1.0 / priority
-            
-            for pattern in keyword_list:
-                if not pattern or not isinstance(pattern, str):
-                    continue
+    # If local normalizer returned nothing useful, fallback to extracting alphanumeric runs
+    if not norm or not _has_alnum(norm):
+        raw_alnum = re.findall(r"[A-Za-z0-9]+", text or "")
+        if raw_alnum:
+            norm = " ".join(raw_alnum).lower()
+        else:
+            norm = ""
 
-                pat_norm, pat_tokens = _normalize_and_tokenize(pattern)
-                is_regex = any(ch in pattern for ch in ("\\b", "^", "$", "(", ")", "[", "]", ".*"))
+    if not norm:
+        return []
 
-                if pat_norm == segment:
-                    score = _score_exact() * weight
-                    match_info = {
-                        "intent": intent, "action": intent, "score": score,
-                        "match_type": "exact", "matched_text": pattern,
+    # split into segments to handle multi-intent sentences
+    norm_for_segments = _normalize_text_local(norm) if norm else ""
+    if norm_for_segments:
+        segments = [s.strip() for s in re.split(r"\band\b|,|;|\?|!|\n", norm_for_segments) if s.strip()]
+    else:
+        raw_alnum = re.findall(r"[A-Za-z0-9]+", norm or "")
+        segments = [" ".join(raw_alnum).lower()] if raw_alnum else []
+
+    # Collect candidates: intent -> best info
+    candidates: Dict[str, Dict[str, Any]] = {}
+
+    for seg in segments:
+        seg_norm, seg_tokens = _normalize_and_tokenize(seg)
+        seg_token_set = set(seg_tokens)
+
+        # exact phrase check (compare token tuples)
+        seg_tuple = tuple(seg_tokens)
+        if seg_tuple:
+            for intent, data in compiled.items():
+                for phrase_tokens in data.get("phrases", []):
+                    if phrase_tokens == seg_tuple:
+                        score = _score_exact()
+                        info = {
+                            "id": intent,
+                            "intent": intent,
+                            "action": intent,
+                            "score": score,
+                            "source": "keyword",
+                            "match_type": "exact",
+                            "matched_text": " ".join(phrase_tokens)
+                        }
+                        existing = candidates.get(intent)
+                        if not existing or existing.get("score", 0) < score:
+                            candidates[intent] = info
+
+        # regex checks
+        for intent, data in compiled.items():
+            for rx in data.get("regex", []):
+                m = rx.search(seg_norm)
+                if m:
+                    match_len = len(m.group(0) or "")
+                    weight = 1.0 / (data.get("priority") or 1)
+                    score = _score_regex(match_len, len(m.group(0) or ""), weight=weight)
+                    info = {
+                        "id": intent,
+                        "intent": intent,
+                        "action": intent,
+                        "score": score,
+                        "source": "keyword",
+                        "match_type": "regex",
+                        "matched_text": m.group(0)
                     }
-                    candidates.append((score, match_info))
-                    best_match_for_segment = match_info
-                    best_score = score
-                    break 
+                    existing = candidates.get(intent)
+                    if not existing or score > existing.get("score", 0):
+                        candidates[intent] = info
 
-                if best_match_for_segment and best_match_for_segment.get("match_type") == "exact":
+        # partial / token-overlap matching
+        for intent, data in compiled.items():
+            best_for_intent = candidates.get(intent, {})
+            best_score_local = best_for_intent.get("score", 0.0)
+
+            for phrase_tokens in data.get("phrases", []):
+                if not phrase_tokens:
                     continue
-
-                if is_regex:
-                    compiled = _compile_pattern(pattern)
-                    if compiled:
-                        m = compiled.search(segment)
-                        if m:
-                            match_len = len(m.group(0))
-                            score = _score_regex(match_len, len(pattern), weight)
-                            if score > best_score:
-                                candidates.append((score, {
-                                    "intent": intent, "action": intent, "score": score,
-                                    "match_type": "regex", "matched_text": m.group(0),
-                                }))
+                p_set = set(phrase_tokens)
+                overlap = len(p_set & seg_token_set)
+                if overlap <= 0:
                     continue
+                weight = 1.0 / (data.get("priority") or 1)
+                score = _score_partial(overlap, len(phrase_tokens), weight=weight)
+                if score > best_score_local:
+                    candidates[intent] = {
+                        "id": intent,
+                        "intent": intent,
+                        "action": intent,
+                        "score": score,
+                        "source": "keyword",
+                        "match_type": "partial",
+                        "matched_text": " ".join(phrase_tokens)
+                    }
+                    best_score_local = score
 
-                if pat_tokens:
-                    overlap = len(seg_tokens & set(pat_tokens))
-                    if overlap > 0:
-                        score = _score_partial(overlap, len(pat_tokens), weight)
-                        if score > best_score * 0.5: 
-                            candidates.append((score, {
-                                "intent": intent, "action": intent, "score": score,
-                                "match_type": "partial", "matched_text": pattern,
-                            }))
-            
-            if best_match_for_segment and best_match_for_segment.get("match_type") == "exact":
-                break
+    # Sort results by score then by match type rank (exact > regex > partial)
+    def _rank_key(item: Dict[str, Any]) -> Tuple[float, int]:
+        typ = item.get("match_type", "")
+        typ_rank = {"exact": 3, "regex": 2, "partial": 1}.get(typ, 0)
+        return (item.get("score", 0.0), typ_rank)
 
-    def sort_key(item: Tuple[float, Dict]) -> Tuple[float, int, int]:
-        info = item[1]
-        score = info.get("score", 0.0)
-        match_type = info.get("match_type", "")
-        typ_rank = {"exact": 3, "regex": 2, "partial": 1}.get(match_type, 0)
-        return (score, typ_rank, len(str(info.get("matched_text") or "")))
+    results = sorted(candidates.values(), key=_rank_key, reverse=True)[:top_n]
 
-    candidates.sort(key=sort_key, reverse=True)
+    # Note: previously logged latency; logging removed as requested.
+    return results
 
-    final_results = []
-    seen_intents = set()
-    for _, info in candidates:
-        if info["intent"] not in seen_intents:
-            final_results.append(info)
-            seen_intents.add(info["intent"])
+# -----------------------
+# KeywordMatcher class (DecisionEngine compatibility)
+# -----------------------
+class KeywordMatcher:
+    def __init__(self):
+        _precompile_keywords()
 
-    return final_results[:top_n]
+    def search(self, query: str) -> List[Dict[str, Any]]:
+        # DecisionEngine expects a list of dicts with id,intent,score,source,match_type,matched_text
+        return match_keywords(query, top_n=3)
 
 
+# If run as script, perform a quick self-test
 if __name__ == "__main__":
-    print("Keyword matcher standalone test (may fail due to imports)")
-    pass
+    # Manual test
+    matcher = KeywordMatcher()
+    print(matcher.search("add@@to#cart$"))

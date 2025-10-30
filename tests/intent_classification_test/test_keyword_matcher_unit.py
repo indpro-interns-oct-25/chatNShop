@@ -1,9 +1,25 @@
-# tests/test_keyword_matcher.py
+# tests/test_keyword_matcher_unit.py
 import time
 import unittest
 from app.ai.intent_classification.keyword_matcher import match_keywords
 from app.ai.intent_classification.scoring import calculate_confidence
 
+
+def test_exact_match():
+    result = match_keywords("add to cart")
+    assert result
+    assert result[0]["intent"] == "ADD_TO_CART"
+
+def test_partial_match():
+    result = match_keywords("add this item")
+    assert any("ADD_TO_CART" in r["intent"] for r in result)
+
+def test_case_insensitive():
+    r1 = match_keywords("Add To Cart")
+    r2 = match_keywords("add to cart")
+    assert r1[0]["intent"] == r2[0]["intent"]
+
+# tests/test_keyword_matcher.py
 
 class TestKeywordMatcher(unittest.TestCase):
 
