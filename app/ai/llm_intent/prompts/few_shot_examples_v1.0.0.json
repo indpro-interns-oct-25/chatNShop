@@ -198,5 +198,130 @@
       "secondary_intents": ["APPLY_COUPON"],
       "entities_extracted": ["shoes"]
     }
+  },
+
+  {
+    "user": "I want to buy shoes or maybe add them later",
+    "assistant": {
+      "action_code": "SEARCH_PRODUCT",
+      "confidence": 0.65,
+      "reasoning": "User expresses mixed intent between search and add-to-cart.",
+      "secondary_intents": ["ADD_TO_CART"],
+      "entities_extracted": ["shoes"],
+      "ambiguity": true
+    }
+  },
+  {
+    "user": "My order is delayed, can I cancel it?",
+    "assistant": {
+      "action_code": "ORDER_CANCEL",
+      "confidence": 0.85,
+      "reasoning": "Primary intent is to cancel order, though user also expresses frustration about delay.",
+      "secondary_intents": ["ORDER_STATUS"],
+      "entities_extracted": []
+    }
+  },
+  {
+    "user": "Can I get a discount or apply coupon?",
+    "assistant": {
+      "action_code": "APPLY_COUPON",
+      "confidence": 0.80,
+      "reasoning": "Ambiguous between applying coupon or viewing offers; resolved to APPLY_COUPON.",
+      "secondary_intents": ["VIEW_COUPONS"],
+      "entities_extracted": [],
+      "ambiguity": true
+    }
+  },
+  {
+    "user": "Something is wrong with my order",
+    "assistant": {
+      "action_code": "CONTACT_SUPPORT",
+      "confidence": 0.85,
+      "reasoning": "Unclear if it's delay, wrong item, or payment; best to route to support.",
+      "secondary_intents": ["ORDER_STATUS"],
+      "entities_extracted": [],
+      "ambiguity": true
+    }
+  },
+  {
+    "user": "Find me deals on running gear under 1000",
+    "assistant": {
+      "action_code": "SEARCH_DISCOUNT",
+      "confidence": 0.91,
+      "reasoning": "User combines search and discount filter with price constraint.",
+      "secondary_intents": ["FILTER_PRICE"],
+      "entities_extracted": ["running gear", "under 1000"]
+    }
+  },
+  {
+    "user": "Show my order details",
+    "assistant": {
+      "action_code": "ORDER_STATUS",
+      "confidence": 0.90,
+      "reasoning": "User requests viewing order details.",
+      "secondary_intents": [],
+      "entities_extracted": []
+    }
+  },
+  {
+    "user": "What are your current offers?",
+    "assistant": {
+      "action_code": "VIEW_COUPONS",
+      "confidence": 0.88,
+      "reasoning": "User asks for available offers or coupons.",
+      "secondary_intents": ["SEARCH_DISCOUNT"],
+      "entities_extracted": []
+    }
+  },
+  {
+    "user": "Track my package",
+    "assistant": {
+      "action_code": "ORDER_STATUS",
+      "confidence": 0.93,
+      "reasoning": "Common variant of tracking order shipment.",
+      "secondary_intents": [],
+      "entities_extracted": []
+    }
+  },
+  {
+    "user": "I want to talk to someone",
+    "assistant": {
+      "action_code": "CONTACT_SUPPORT",
+      "confidence": 0.92,
+      "reasoning": "User implicitly requests live support.",
+      "secondary_intents": [],
+      "entities_extracted": []
+    }
+  },
+  {
+    "user": "Reset or change my password",
+    "assistant": {
+      "action_code": "PASSWORD_RESET",
+      "confidence": 0.94,
+      "reasoning": "User expresses both reset/change password intent — treated as same action.",
+      "secondary_intents": [],
+      "entities_extracted": []
+    }
+  },
+  {
+    "user": "Show me electronics like last time",
+    "assistant": {
+      "action_code": "SEARCH_PRODUCT",
+      "confidence": 0.87,
+      "reasoning": "User references previous behavior, likely wants to search products again.",
+      "secondary_intents": [],
+      "entities_extracted": ["electronics"]
+    }
+  },
+  {
+    "user": "Something is not working",
+    "assistant": {
+      "action_code": "CONTACT_SUPPORT",
+      "confidence": 0.60,
+      "reasoning": "Extremely ambiguous, no entity or context; route to support.",
+      "secondary_intents": [],
+      "entities_extracted": [],
+      "ambiguity": true
+    }
   }
 ]
