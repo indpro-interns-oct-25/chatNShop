@@ -50,6 +50,8 @@ class QueueConfig(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+    class Config:
+        extra="ignore"
 
 
 # Global config instance
