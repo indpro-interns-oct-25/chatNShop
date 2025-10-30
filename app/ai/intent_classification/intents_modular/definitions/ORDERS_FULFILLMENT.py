@@ -12,6 +12,8 @@ orders_fulfillment_intent_definitions = {
             "Check order status",
             "Order status",
             "Where is my order?",
+            "Where is my order ORD123?",
+            "Track my order",
             "Status of my order",
             "How is my order?",
             "Order progress",

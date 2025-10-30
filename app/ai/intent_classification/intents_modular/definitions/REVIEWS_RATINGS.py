@@ -95,7 +95,10 @@ reviews_ratings_intent_definitions = {
             "Customer reviews",
             "What do people say?",
             "Show me feedback",
-            "User reviews"
+            "User reviews",
+            "Show reviews for headphones",
+            "See product reviews",
+            "Show me reviews for the wireless headphones"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],

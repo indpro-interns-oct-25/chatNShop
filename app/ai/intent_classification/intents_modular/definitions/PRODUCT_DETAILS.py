@@ -355,7 +355,9 @@ product_details_intent_definitions = {
             "Product comparison",
             "Compare these items",
             "Show comparison",
-            "Compare side by side"
+            "Compare side by side",
+            "Compare iPhone and Galaxy",
+            "Compare iPhone 14 and Galaxy S23"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],

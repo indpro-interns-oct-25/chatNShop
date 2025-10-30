@@ -29,6 +29,32 @@ def load_json_config(file_path):
         return None
 
 
+def validate_config(name: str, data: dict) -> bool:
+    """Light validation to prevent bad configs from entering cache."""
+    try:
+        if name == "rules":
+            # expect a rules.rule_sets dict and numeric weights if present
+            rule_sets = data.get("rules", {}).get("rule_sets", {})
+            if not isinstance(rule_sets, dict) or not rule_sets:
+                print("⚠️ Invalid rules config: missing rules.rule_sets")
+                return False
+            for variant, cfg in rule_sets.items():
+                if not isinstance(cfg, dict):
+                    return False
+                kw = cfg.get("kw_weight")
+                emb = cfg.get("emb_weight")
+                if kw is not None and emb is not None:
+                    total = float(kw) + float(emb)
+                    if abs(total - 1.0) > 1e-6:
+                        print("⚠️ Invalid weights: kw_weight + emb_weight must equal 1.0")
+                        return False
+        # allow other configs unvalidated for now
+        return True
+    except Exception as e:
+        print(f"⚠️ Config validation error for {name}: {e}")
+        return False
+
+
 def save_version(file_path):
     """Backup old configuration with timestamp for version control."""
     filename = os.path.basename(file_path)
@@ -66,7 +92,7 @@ def load_all_configs():
             file_to_load = variant_path if os.path.exists(variant_path) else os.path.join(CONFIG_DIR, filename)
 
             data = load_json_config(file_to_load)
-            if data:
+            if data and validate_config(filename.replace(".json", ""), data):
                 CONFIG_CACHE[filename.replace(".json", "")] = data
     
     # Load keywords from the actual keywords directory

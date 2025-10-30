@@ -12,7 +12,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Any, Dict, Optional, List
 
 # All imports should now work correctly, assuming
 # all packages (like 'app', 'app/ai', etc.)
@@ -172,9 +173,56 @@ class ClassificationInput(BaseModel):
     text: str
     # You could add more fields here, like user_id, session_id, etc.
 
+
+class ClassificationOutput(BaseModel):
+    action_code: str = Field(..., description="Resolved action code")
+    confidence_score: float = Field(..., ge=0.0, le=1.0, description="Confidence (0-1)")
+    matched_keywords: List[str] = Field(default_factory=list, description="Matched keyword phrases")
+    original_text: str = Field(..., description="Original input text")
+    status: str = Field(..., description="Resolution status (e.g., CONFIDENT_KEYWORD, FALLBACK_*)")
+    intent: Optional[Dict[str, Any]] = Field(default=None, description="Raw top intent payload for debug")
+
 # 2. Create the classification POST endpoint
-@app.post("/classify", tags=["Intent Classification"])
-async def classify_intent(user_input: ClassificationInput) -> Dict[str, Any]:
+@app.post(
+    "/classify",
+    tags=["Intent Classification"],
+    response_model=ClassificationOutput,
+    summary="Classify user input into an intent",
+    responses={
+        200: {
+            "description": "Classification result",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "action_code": "ADD_TO_CART",
+                        "confidence_score": 0.92,
+                        "matched_keywords": ["add to cart"],
+                        "original_text": "Add this to my cart",
+                        "status": "CONFIDENT_KEYWORD",
+                        "intent": {
+                            "id": "ADD_TO_CART",
+                            "score": 0.92,
+                            "source": "keyword",
+                        },
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "Classification Failed",
+                        "message": "An internal error occurred while processing the request.",
+                        "detail": "<error details>",
+                    }
+                }
+            },
+        },
+    },
+)
+async def classify_intent(user_input: ClassificationInput) -> ClassificationOutput:
     """
     Receives user text and returns the classified intent.
     
@@ -186,7 +234,19 @@ async def classify_intent(user_input: ClassificationInput) -> Dict[str, Any]:
     try:
         # The classification function is synchronous (not async)
         result = get_intent_classification(user_input.text)
-        
+
+        # Normalize API output to include action_code, confidence_score, matched_keywords
+        top = result.get("intent", {}) if isinstance(result, dict) else {}
+        action_code = top.get("id") or top.get("intent")
+        confidence_score = top.get("score")
+        matched_kw = top.get("matched_text")
+        if action_code is not None:
+            result.setdefault("action_code", action_code)
+        if confidence_score is not None:
+            result.setdefault("confidence_score", confidence_score)
+        if matched_kw:
+            result.setdefault("matched_keywords", [matched_kw])
+
         # Add original text to the response
         result["original_text"] = user_input.text
 
@@ -198,7 +258,15 @@ async def classify_intent(user_input: ClassificationInput) -> Dict[str, Any]:
         # 3. Add the search results to the 'result' dictionary
         # --- End TODO ---
         
-        return result
+        # Shape to response model
+        return ClassificationOutput(
+            action_code=result.get("action_code", "UNKNOWN_INTENT"),
+            confidence_score=float(result.get("confidence_score", 0.0)),
+            matched_keywords=result.get("matched_keywords", []),
+            original_text=user_input.text,
+            status=str(result.get("status", "UNKNOWN")),
+            intent=result.get("intent"),
+        )
 
     except Exception as e:
         # Log the error for debugging

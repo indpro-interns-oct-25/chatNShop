@@ -12,6 +12,13 @@ from app.ai.config import PRIORITY_THRESHOLD, WEIGHTS  # Fallback config
 from app.ai.intent_classification.keyword_matcher import KeywordMatcher
 from app.ai.intent_classification.embedding_matcher import EmbeddingMatcher
 from app.ai.intent_classification import confidence_threshold
+# Optional LLM fallback
+try:
+    from app.ai.llm_intent.request_handler import RequestHandler as _LLMHandler
+    from app.schemas.llm_intent import LLMIntentRequest as _LLMReq
+except Exception:
+    _LLMHandler = None  # type: ignore
+    _LLMReq = None  # type: ignore
 # --- END CONFIG MANAGER INTEGRATION ---
 
 class DecisionEngine:
@@ -26,7 +33,8 @@ class DecisionEngine:
         """
         print("Initializing DecisionEngine...")
         self.keyword_matcher = KeywordMatcher()
-        self.embedding_matcher = EmbeddingMatcher()
+        # Lazy-load embedding matcher to avoid loading model when disabled or in tests
+        self.embedding_matcher = None
         
         # Load settings from config manager (with fallback to static config)
         self._load_config_from_manager()
@@ -51,22 +59,22 @@ class DecisionEngine:
                 self.use_keywords = current_rules.get('use_keywords', True)
                 print(f"📋 Using config manager rules for variant {ACTIVE_VARIANT}: embedding={self.use_embedding}, keywords={self.use_keywords}")
             else:
-                # Fallback to static config
+                # Fallback to static config (biased to embeddings for production)
                 self.use_embedding = True
                 self.use_keywords = True
-                self.priority_threshold = PRIORITY_THRESHOLD
-                self.kw_weight = WEIGHTS["keyword"]
-                self.emb_weight = WEIGHTS["embedding"]
-                print("📋 Using fallback static config")
+                self.priority_threshold = 0.90
+                self.kw_weight = 0.4
+                self.emb_weight = 0.6
+                print("📋 Using fallback static config (Variant B: kw=0.4, emb=0.6, threshold=0.90)")
                 
         except Exception as e:
-            # Fallback to static config on any error
+            # Fallback to static config on any error (Variant B)
             print(f"⚠️ Config manager error, using fallback: {e}")
             self.use_embedding = True
             self.use_keywords = True
-            self.priority_threshold = PRIORITY_THRESHOLD
-            self.kw_weight = WEIGHTS["keyword"]
-            self.emb_weight = WEIGHTS["embedding"]
+            self.priority_threshold = 0.90
+            self.kw_weight = 0.4
+            self.emb_weight = 0.6
 
     def search(self, query: str) -> Dict[str, Any]:
         """
@@ -94,6 +102,8 @@ class DecisionEngine:
         
         # Use embedding matching if enabled
         if self.use_embedding:
+            if self.embedding_matcher is None:
+                self.embedding_matcher = EmbeddingMatcher()
             embedding_results = self.embedding_matcher.search(query)
         
         # Blend results if both methods are enabled
@@ -157,25 +167,57 @@ class DecisionEngine:
                 "config_variant": ACTIVE_VARIANT
             }
         else:
-            # Enhanced fallback for low confidence results
+            # Deterministic selection on low-confidence: pick top blended action
             print(f"⚠ Blended result is NOT confident. Reason: {reason}")
-            
-            # If we have any results, return the best one with fallback status
-            if blended_results and blended_results[0]['score'] >= 0.1:
-                print(f"✅ Returning best available result as fallback")
+            # Attempt LLM fallback if available
+            if _LLMHandler and _LLMReq:
+                try:
+                    handler = _LLMHandler()
+                    # Build minimal LLM request using top keyword/embedding confidences if present
+                    top_kw = keyword_results[0]['score'] if keyword_results else 0.0
+                    next_kw = keyword_results[1]['score'] if len(keyword_results) > 1 else 0.0
+                    llm_req = _LLMReq(
+                        user_input=query,
+                        rule_intent=blended_results[0]['id'] if blended_results else None,
+                        action_code=blended_results[0]['id'] if blended_results else None,
+                        top_confidence=float(top_kw),
+                        next_best_confidence=float(next_kw),
+                        is_fallback=True,
+                    )
+                    llm_out = handler.handle(llm_req)
+                    if llm_out and isinstance(llm_out, dict):
+                        # Return LLM-resolved action_code as final
+                        resolved = {
+                            "id": llm_out.get("action_code"),
+                            "intent": llm_out.get("action_code"),
+                            "score": llm_out.get("confidence", 0.0),
+                            "source": "llm",
+                            "reason": "llm_fallback"
+                        }
+                        return {
+                            "status": "LLM_FALLBACK",
+                            "intent": resolved,
+                            "config_variant": ACTIVE_VARIANT
+                        }
+                except Exception as _:
+                    pass
+            if blended_results:
+                # If multiple with close scores, prefer one with higher embedding_score
+                blended_results.sort(key=lambda x: (x.get('score', 0.0), x.get('embedding_score', 0.0)), reverse=True)
+                top = blended_results[0]
+                print("✅ Selecting top blended action deterministically")
                 return {
-                    "status": f"FALLBACK_{reason}",
-                    "intent": blended_results[0],
+                    "status": f"BLENDED_TOP_{reason}",
+                    "intent": top,
                     "config_variant": ACTIVE_VARIANT
                 }
-            
             # Final fallback to generic search
             print(f"⚠ No suitable results, returning generic search")
             return {
                 "status": "FALLBACK_GENERIC",
                 "intent": {
                     "id": "SEARCH_PRODUCT",
-                    "intent": "SEARCH_PRODUCT", 
+                    "intent": "SEARCH_PRODUCT",
                     "score": 0.1,
                     "source": "fallback",
                     "reason": "generic_search_fallback"
