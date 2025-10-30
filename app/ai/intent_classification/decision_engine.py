@@ -299,19 +299,16 @@ class DecisionEngine:
         
         for intent_id, scores in intent_scores.items():
             # Weighted average of scores
-            blended_score = (scores['keyword_score'] * kw_weight + 
-                           scores['embedding_score'] * emb_weight)
-            
-            # Use the result with higher individual score as base
-            if scores['keyword_score'] > scores['embedding_score']:
-                base_result = scores['keyword_result']
-            else:
-                base_result = scores['embedding_result']
-            
-            if base_result:
-                blended_result = base_result.copy()
+            blended_score = (scores['keyword_score'] * kw_weight +
+                             scores['embedding_score'] * emb_weight)
+
+            dominant_result = scores['keyword_result'] or scores['embedding_result']
+            dominant_source = 'keyword' if scores['keyword_result'] else 'embedding'
+
+            if dominant_result:
+                blended_result = dominant_result.copy()
                 blended_result['score'] = blended_score
-                blended_result['source'] = 'blended'
+                blended_result['source'] = dominant_source
                 blended_result['keyword_score'] = scores['keyword_score']
                 blended_result['embedding_score'] = scores['embedding_score']
                 blended_results.append(blended_result)
@@ -335,10 +332,24 @@ class DecisionEngine:
         is_fallback: bool = False,
     ) -> RuleDecision:
         confidence_gap = max(0.0, round(top_confidence - next_best_confidence, 4))
+        intent_copy = dict(intent) if intent else None
+        if intent_copy is not None:
+            if "source" in intent_copy and "matcher_source" not in intent_copy:
+                intent_copy["matcher_source"] = intent_copy["source"]
+            intent_copy["source"] = "rule_based"
+
+        candidates_copy: List[Dict[str, Any]] = []
+        for candidate in candidates:
+            candidate_copy = dict(candidate)
+            if "source" in candidate_copy and "matcher_source" not in candidate_copy:
+                candidate_copy["matcher_source"] = candidate_copy["source"]
+            candidate_copy["source"] = "rule_based"
+            candidates_copy.append(candidate_copy)
+
         decision = RuleDecision(
             classification_status=status,
-            intent=intent,
-            candidates=candidates,
+            intent=intent_copy,
+            candidates=candidates_copy,
             top_confidence=top_confidence,
             next_best_confidence=next_best_confidence,
             confidence_gap=confidence_gap,

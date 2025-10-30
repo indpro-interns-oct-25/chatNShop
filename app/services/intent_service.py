@@ -45,7 +45,7 @@ def classify_intent(
             start_time=pipeline_start,
             tags={"llm_triggered": False, "classification_status": combined_result.get("classification_status")},
         )
-        return combined_result
+        return _build_final_response(combined_result)
 
     logger.info(
         "Escalating intent classification to LLM fallback",
@@ -97,7 +97,7 @@ def classify_intent(
             "classification_status": combined_result.get("classification_status"),
         },
     )
-    return combined_result
+    return _build_final_response(combined_result)
 
 
 def _build_llm_request(
@@ -188,6 +188,38 @@ def _handle_llm_failure(result: Dict[str, Any], reason: str, exc: BaseException)
 
 def _pipeline_elapsed(start: float) -> float:
     return round((time.perf_counter() - start) * 1000, 2)
+
+
+def _build_final_response(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Project a minimal response payload for API consumers."""
+
+    intent_block = result.get("intent") or {}
+    resolved_intent = result.get("resolved_intent") or intent_block.get("intent") or "unknown_intent"
+    action_code = result.get("resolved_action_code") or intent_block.get("id") or intent_block.get("action")
+    confidence = (
+        result.get("top_confidence")
+        or intent_block.get("score")
+        or result.get("confidence", 0.0)
+    )
+
+    response: Dict[str, Any] = {
+        "intent": resolved_intent,
+        "action_code": action_code,
+        "confidence": round(float(confidence or 0.0), 4),
+        "source": intent_block.get("source", "keyword" if not result.get("llm_triggered") else "llm"),
+        "llm_triggered": bool(result.get("llm_triggered")),
+    }
+
+    if result.get("trigger_reason"):
+        response["trigger_reason"] = result["trigger_reason"]
+
+    if result.get("handoff_metadata"):
+        response["handoff_metadata"] = result["handoff_metadata"]
+
+    if result.get("llm_errors"):
+        response["llm_errors"] = list(result["llm_errors"])
+
+    return response
 
 
 __all__ = ["classify_intent"]

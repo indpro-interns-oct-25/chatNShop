@@ -55,7 +55,8 @@ def load_all_configs():
     global CONFIG_CACHE
 
     print(f"🔄 Loading configuration variant: {ACTIVE_VARIANT}")
-    
+    CONFIG_CACHE = {}  # Reset config cache before reloading configs
+
     # Load rules and other config files from config/ directory
     for filename in os.listdir(CONFIG_DIR):
         if filename.endswith(".json") and "_" not in filename:  # Base names only
