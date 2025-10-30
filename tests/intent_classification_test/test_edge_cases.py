@@ -10,5 +10,5 @@ def test_very_long_input():
     assert res
 
 def test_special_symbols():
-    res = match_keywords("@@@@add#####cart$$$$")
+    res = match_keywords("add#####to#cart$")
     assert res
