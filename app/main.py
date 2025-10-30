@@ -19,6 +19,7 @@ from pydantic import BaseModel
 # have an '__init__.py' file.
 print("Attempting to import Decision Engine...")
 from app.ai.intent_classification.decision_engine import get_intent_classification
+from app.api.v1.intent import router as intent_router
 print("Successfully imported Decision Engine.")
 
 # --- Qdrant Client Import ---
@@ -216,7 +217,7 @@ async def classify_intent(user_input: ClassificationInput) -> Dict[str, Any]:
 
 
 # Include API routers
-app.include_router(intent.router)
+app.include_router(intent_router)
 
 # app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"])
 # app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
