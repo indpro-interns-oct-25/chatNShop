@@ -15,7 +15,8 @@ cart_wishlist_intent_definitions = {
             "Add to shopping cart",
             "I'll take this",
             "Add this item",
-            "Buy this now"
+            "Buy this now",
+            
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[EntityType.QUANTITY, EntityType.SIZE, EntityType.COLOR],
