@@ -17,6 +17,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
+# Copy application code and static config/keywords into the image
+COPY . .
+COPY ./config /app/config
+COPY ./app/ai/intent_classification/keywords /app/app/ai/intent_classification/keywords
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
