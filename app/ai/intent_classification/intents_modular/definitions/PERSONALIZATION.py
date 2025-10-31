@@ -20,7 +20,9 @@ personalization_intent_definitions = {
             "Find what I like",
             "Personalized recommendations",
             "Search my style",
-            "Find my preferences"
+            "Find my preferences",
+            "Results tailored to me",
+            "Search using my taste"
         ],
         required_entities=[EntityType.SEARCH_TERM],
         optional_entities=[EntityType.USER_ID, EntityType.PREFERENCES],
@@ -40,7 +42,9 @@ personalization_intent_definitions = {
             "My personalized deals",
             "Show me my offers",
             "Personalized promotions",
-            "Deals for me"
+            "Deals for me",
+            "Offers tailored to me",
+            "Any special deals for my account?"
         ],
         required_entities=[],
         optional_entities=[EntityType.USER_ID, EntityType.PREFERENCES],
@@ -60,7 +64,9 @@ personalization_intent_definitions = {
             "Keep my preferences",
             "Save my options",
             "Remember my preferences",
-            "Store my choices"
+            "Store my choices",
+            "Save these selections",
+            "Persist my preferences"
         ],
         required_entities=[EntityType.PREFERENCES],
         optional_entities=[EntityType.USER_ID],
@@ -80,7 +86,9 @@ personalization_intent_definitions = {
             "Change my options",
             "Modify my preferences",
             "Update my settings",
-            "Change my choices"
+            "Change my choices",
+            "Revise my preferences",
+            "Adjust my settings"
         ],
         required_entities=[EntityType.PREFERENCES],
         optional_entities=[EntityType.USER_ID],
@@ -100,7 +108,9 @@ personalization_intent_definitions = {
             "View my options",
             "Display my preferences",
             "Show my settings",
-            "View my choices"
+            "View my choices",
+            "What preferences have I saved?",
+            "List my saved settings"
         ],
         required_entities=[],
         optional_entities=[EntityType.USER_ID],
@@ -120,7 +130,9 @@ personalization_intent_definitions = {
             "Reset my choices",
             "Delete my options",
             "Clear my data",
-            "Reset my settings"
+            "Reset my settings",
+            "Remove all saved preferences",
+            "Wipe my personalization"
         ],
         required_entities=[],
         optional_entities=[EntityType.USER_ID],

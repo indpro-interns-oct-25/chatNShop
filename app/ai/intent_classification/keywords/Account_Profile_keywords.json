@@ -113,7 +113,7 @@
       "resend verification", "resend confirmation", "send verification email again", "send confirmation email", "resend email verification",
       "resend confirmation link", "send email again", "email verification resend", "send confirmation link again", "resend email",
       "send verification link", "repeat email verification", "resend registration confirmation", "send verification again", "resend account verification",
-      "resend email confirmation link", "resend verify email", "repeat email confirmation", "send verification email again", "resend email link"
+      "resend email confirmation link", "resend verify email", "repeat email confirmation", "re-send verification email", "resend email link"
     ]
   },
   "PROFILE_PICTURE_UPDATE": {
