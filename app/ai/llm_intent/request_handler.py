@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from app.schemas.llm_intent import LLMIntentRequest
 
@@ -11,13 +11,37 @@ from .entity_extractor import INTENT_CATEGORIES
 from .fallback_manager import build_fallback_response
 from .openai_client import OpenAIClient
 from .response_parser import LLMIntentResponse as ParsedLLMResponse, parse_llm_response
+from .prompt_loader import PromptLoader, PromptLoadError, get_prompt_loader
+import logging
+
+logger = logging.getLogger("request_handler")
 
 
 class RequestHandler:
     """Execute the hybrid rule-based + LLM intent classification flow."""
 
-    def __init__(self, client: Optional[OpenAIClient] = None) -> None:
+    def __init__(
+        self, 
+        client: Optional[OpenAIClient] = None,
+        prompt_loader: Optional[PromptLoader] = None
+    ) -> None:
+        """
+        Initialize request handler.
+        
+        Args:
+            client: OpenAI client instance (optional, will use default if None)
+            prompt_loader: Prompt loader instance (optional, will use singleton if None)
+        """
         self.client = client
+        try:
+            self.prompt_loader = prompt_loader or get_prompt_loader()
+            logger.info("RequestHandler initialized with prompt loader")
+        except PromptLoadError as e:
+            logger.warning(
+                f"Failed to load prompts: {e}. "
+                f"LLM requests will use simple user messages without prompts."
+            )
+            self.prompt_loader = None
 
     def handle(self, payload: LLMIntentRequest) -> Dict[str, Any]:
         """Process an intent request and return a normalized response payload."""
@@ -50,8 +74,25 @@ class RequestHandler:
             }
 
         try:
-            raw_result = self._invoke_llm(payload)
-            parsed: ParsedLLMResponse = parse_llm_response(raw_result)
+            # Pass through OpenAI params from payload.metadata or use default
+            openai_opts = payload.metadata.get("openai", {}) if hasattr(payload, 'metadata') and payload.metadata else {}
+            raw_result = self._invoke_llm(payload, **openai_opts)
+            
+            # Parse LLM response - handle both string and dict formats
+            if isinstance(raw_result, dict) and "raw_response" in raw_result:
+                # Parse the raw_response string (JSON from LLM)
+                parsed: ParsedLLMResponse = parse_llm_response(raw_result["raw_response"])
+                processing_time_ms = raw_result.get("processing_time_ms")
+            elif isinstance(raw_result, dict):
+                # Try parsing as dict directly
+                parsed: ParsedLLMResponse = parse_llm_response(raw_result)
+                processing_time_ms = raw_result.get("processing_time_ms")
+            else:
+                # String response - parse JSON
+                parsed: ParsedLLMResponse = parse_llm_response(str(raw_result))
+                processing_time_ms = None
+            
+            logger.info(f"LLM intent result: intent={parsed.intent}, action_code={parsed.action_code}, confidence={parsed.confidence}")
             return {
                 "triggered": True,
                 "intent": parsed.intent,
@@ -63,11 +104,13 @@ class RequestHandler:
                 "metadata": {
                     **metadata,
                     "source": "llm",
-                    "processing_time_ms": parsed.processing_time_ms,
+                    "processing_time_ms": processing_time_ms or parsed.processing_time_ms,
                     "reasoning": parsed.reasoning,
+                    "prompt_version": self.prompt_loader.version if self.prompt_loader else None,
                 },
             }
         except Exception as exc:  # pragma: no cover - defensive safeguard
+            logger.error(f"LLM call failed: {exc}")
             fallback = build_fallback_response(reason="llm_failure")
             fallback_metadata = fallback.get("metadata", {})
             fallback_metadata.update({"error": str(exc), **metadata})
@@ -78,20 +121,49 @@ class RequestHandler:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _invoke_llm(self, payload: LLMIntentRequest) -> Dict[str, Any]:
+    def _invoke_llm(self, payload: LLMIntentRequest, **opts) -> Dict[str, Any]:
         """Call the configured LLM client or fall back to simulation."""
 
         if self.client is None:
             return self._simulate_llm_response(payload)
 
         request_body = {
-            "model": self.client.model_name,
-            "timeout_ms": self.client.timeout_ms,
-            "user_input": payload.user_input,
-            "context": payload.context_snippets,
-            "metadata": payload.metadata,
+            "messages": self.build_messages(payload),
+            "temperature": opts.get("temperature", getattr(self.client, "temperature", 0.3)),
+            "max_tokens": opts.get("max_tokens", getattr(self.client, "max_tokens", 400)),
         }
-        return self.client.complete(request_body)
+        
+        # Extract response from OpenAI client (it returns dict with 'response' key)
+        result = self.client.complete(request_body, **opts)
+        
+        # Handle OpenAI client response format
+        if "error" in result:
+            logger.error(f"OpenAI client error: {result}")
+            raise RuntimeError(f"OpenAI API error: {result.get('error', 'Unknown error')}")
+        
+        # Extract the actual response text/content
+        if "response" in result:
+            # OpenAI client returns {"response": "...", "latency_ms": ..., "usage": ...}
+            return {
+                "intent": None,  # Will be parsed
+                "intent_category": None,
+                "action_code": None,
+                "confidence": None,
+                "processing_time_ms": result.get("latency_ms"),
+                "reasoning": None,
+                "raw_response": result["response"],
+            }
+        else:
+            # Fallback: assume result is the response directly
+            return {
+                "intent": None,
+                "intent_category": None,
+                "action_code": None,
+                "confidence": None,
+                "processing_time_ms": None,
+                "reasoning": None,
+                "raw_response": result if isinstance(result, str) else str(result),
+            }
 
     def _simulate_llm_response(self, payload: LLMIntentRequest) -> Dict[str, Any]:
         """Generate a deterministic stand-in response when no LLM is wired up."""
@@ -108,6 +180,43 @@ class RequestHandler:
             "confidence": confidence,
             "reasoning": "Simulated LLM output (no API client configured)",
         }
+
+    def build_messages(self, payload: LLMIntentRequest) -> List[Dict[str, str]]:
+        """
+        Build message array for OpenAI ChatCompletion API.
+        
+        Uses system prompt and few-shot examples if available, otherwise
+        falls back to simple user message.
+        
+        Args:
+            payload: LLM intent request payload
+            
+        Returns:
+            List of message dictionaries with 'role' and 'content' keys
+        """
+        if self.prompt_loader is not None:
+            try:
+                # Production mode: use system prompt + few-shot examples
+                messages = self.prompt_loader.build_messages(payload.user_input)
+                logger.debug(
+                    f"Built messages with system prompt and {len(self.prompt_loader.few_shot_examples)} "
+                    f"few-shot examples (version: {self.prompt_loader.version})"
+                )
+                return messages
+            except (PromptLoadError, Exception) as e:
+                logger.warning(
+                    f"Failed to use prompts, falling back to simple message: {e}"
+                )
+                # Fallback to simple message if prompt loading fails
+                return [
+                    {"role": "user", "content": payload.user_input}
+                ]
+        else:
+            # Fallback mode: simple user message only
+            logger.debug("Using simple user message (prompts not available)")
+            return [
+                {"role": "user", "content": payload.user_input}
+            ]
 
     @staticmethod
     def _infer_category(action_code: Optional[str]) -> str:
