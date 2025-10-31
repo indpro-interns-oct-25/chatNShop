@@ -216,3 +216,7 @@ ambiguous_log.json
 config/versions/
 # Keep the directory but ignore the files
 config/versions/*.json
+
+
+logs/
+logs/*.jsonl
