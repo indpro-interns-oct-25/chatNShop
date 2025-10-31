@@ -1,21 +1,24 @@
-<<<<<<< HEAD
 """Handles LLM-based intent classification with robust fallback, logging, and error handling."""
-=======
-"""Coordinator that applies trigger logic, invokes the LLM, and normalizes output."""
 
 from __future__ import annotations
-
-from typing import Any, Dict, List, Optional
->>>>>>> da921c5f57fe9bded2d8dbac52a4ed6c262dae0b
 
 import os
 import time
 import random
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from app.schemas.llm_intent import LLMIntentRequest
 
-<<<<<<< HEAD
+# ---------------------------------------------------------------------
+# External Integrations (from other branch)
+# ---------------------------------------------------------------------
+from .confidence_calibrator import TriggerContext, should_trigger_llm
+from .entity_extractor import INTENT_CATEGORIES
+from .fallback_manager import build_fallback_response
+from .openai_client import OpenAIClient
+from .response_parser import LLMIntentResponse as ParsedLLMResponse, parse_llm_response
+from .prompt_loader import PromptLoader, PromptLoadError, get_prompt_loader
+
 # ---------------------------------------------------------------------
 # Logging Configuration
 # ---------------------------------------------------------------------
@@ -29,44 +32,32 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 
+logger = logging.getLogger("request_handler")
+
 # ---------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------
 MAX_RETRIES = 3
 RETRY_BACKOFF = [1, 2, 4]  # exponential backoff in seconds
-=======
-from .confidence_calibrator import TriggerContext, should_trigger_llm
-from .entity_extractor import INTENT_CATEGORIES
-from .fallback_manager import build_fallback_response
-from .openai_client import OpenAIClient
-from .response_parser import LLMIntentResponse as ParsedLLMResponse, parse_llm_response
-from .prompt_loader import PromptLoader, PromptLoadError, get_prompt_loader
-import logging
-
-logger = logging.getLogger("request_handler")
->>>>>>> da921c5f57fe9bded2d8dbac52a4ed6c262dae0b
 
 
 class RequestHandler:
-    """Manages LLM intent classification with fallback and retry resilience."""
+    """Manages LLM intent classification with fallback, retry resilience, and prompt-based coordination."""
 
-<<<<<<< HEAD
-    def __init__(self):
-        self.simulate_mode = True  # True = no API key required, simulate LLM output
-=======
     def __init__(
-        self, 
+        self,
         client: Optional[OpenAIClient] = None,
         prompt_loader: Optional[PromptLoader] = None
     ) -> None:
         """
         Initialize request handler.
-        
+
         Args:
             client: OpenAI client instance (optional, will use default if None)
             prompt_loader: Prompt loader instance (optional, will use singleton if None)
         """
-        self.client = client
+        self.simulate_mode = True  # True = simulation when no API key
+        self.client = client or OpenAIClient()
         try:
             self.prompt_loader = prompt_loader or get_prompt_loader()
             logger.info("RequestHandler initialized with prompt loader")
@@ -76,7 +67,6 @@ class RequestHandler:
                 f"LLM requests will use simple user messages without prompts."
             )
             self.prompt_loader = None
->>>>>>> da921c5f57fe9bded2d8dbac52a4ed6c262dae0b
 
     # -----------------------------------------------------------------
     # Main entry point
@@ -104,57 +94,11 @@ class RequestHandler:
             except Exception as e:
                 logging.error(f"❌ Error on attempt {attempt}: {str(e)}")
 
-<<<<<<< HEAD
             # Retry delay
             if attempt < MAX_RETRIES:
                 delay = RETRY_BACKOFF[attempt - 1]
                 logging.info(f"⏳ Retrying in {delay}s...")
                 time.sleep(delay)
-=======
-        try:
-            # Pass through OpenAI params from payload.metadata or use default
-            openai_opts = payload.metadata.get("openai", {}) if hasattr(payload, 'metadata') and payload.metadata else {}
-            raw_result = self._invoke_llm(payload, **openai_opts)
-            
-            # Parse LLM response - handle both string and dict formats
-            if isinstance(raw_result, dict) and "raw_response" in raw_result:
-                # Parse the raw_response string (JSON from LLM)
-                parsed: ParsedLLMResponse = parse_llm_response(raw_result["raw_response"])
-                processing_time_ms = raw_result.get("processing_time_ms")
-            elif isinstance(raw_result, dict):
-                # Try parsing as dict directly
-                parsed: ParsedLLMResponse = parse_llm_response(raw_result)
-                processing_time_ms = raw_result.get("processing_time_ms")
-            else:
-                # String response - parse JSON
-                parsed: ParsedLLMResponse = parse_llm_response(str(raw_result))
-                processing_time_ms = None
-            
-            logger.info(f"LLM intent result: intent={parsed.intent}, action_code={parsed.action_code}, confidence={parsed.confidence}")
-            return {
-                "triggered": True,
-                "intent": parsed.intent,
-                "intent_category": parsed.intent_category,
-                "action_code": parsed.action_code,
-                "confidence": parsed.confidence,
-                "requires_clarification": False,
-                "clarification_message": None,
-                "metadata": {
-                    **metadata,
-                    "source": "llm",
-                    "processing_time_ms": processing_time_ms or parsed.processing_time_ms,
-                    "reasoning": parsed.reasoning,
-                    "prompt_version": self.prompt_loader.version if self.prompt_loader else None,
-                },
-            }
-        except Exception as exc:  # pragma: no cover - defensive safeguard
-            logger.error(f"LLM call failed: {exc}")
-            fallback = build_fallback_response(reason="llm_failure")
-            fallback_metadata = fallback.get("metadata", {})
-            fallback_metadata.update({"error": str(exc), **metadata})
-            fallback["metadata"] = fallback_metadata
-            return {"triggered": True, **fallback}
->>>>>>> da921c5f57fe9bded2d8dbac52a4ed6c262dae0b
 
         # 3️⃣ All attempts failed — escalate and return fallback
         logging.critical("🚨 All LLM attempts failed. Triggering escalation path.")
@@ -164,16 +108,10 @@ class RequestHandler:
     # -----------------------------------------------------------------
     # Internal helpers
     # -----------------------------------------------------------------
-
-<<<<<<< HEAD
     def _query_llm(self, request: LLMIntentRequest) -> Dict[str, Any]:
         """Simulate or query an external LLM service."""
         if self.simulate_mode:
             text = request.user_input.lower()
-=======
-    def _invoke_llm(self, payload: LLMIntentRequest, **opts) -> Dict[str, Any]:
-        """Call the configured LLM client or fall back to simulation."""
->>>>>>> da921c5f57fe9bded2d8dbac52a4ed6c262dae0b
 
             # Simulated intent predictions
             if "remove" in text and "cart" in text:
@@ -191,10 +129,47 @@ class RequestHandler:
             else:
                 return self._fallback_unclear_response(request)
 
-<<<<<<< HEAD
-        # Production (real API) — replace with actual API call
-        raise TimeoutError("LLM API not available or network issue.")
+        # Real LLM Invocation (if simulate_mode = False)
+        try:
+            messages = self.build_messages(request)
+            result = self.client.complete(
+                {"messages": messages, "temperature": 0.3, "max_tokens": 400}
+            )
 
+            if "error" in result:
+                raise RuntimeError(f"OpenAI API error: {result['error']}")
+
+            parsed: ParsedLLMResponse = parse_llm_response(result.get("response", ""))
+            logger.info(
+                f"LLM intent result: intent={parsed.intent}, action_code={parsed.action_code}, confidence={parsed.confidence}"
+            )
+
+            return {
+                "triggered": True,
+                "intent": parsed.intent,
+                "intent_category": parsed.intent_category,
+                "action_code": parsed.action_code,
+                "confidence": parsed.confidence,
+                "requires_clarification": False,
+                "clarification_message": None,
+                "metadata": {
+                    "source": "llm",
+                    "processing_time_ms": result.get("latency_ms"),
+                    "reasoning": parsed.reasoning,
+                    "prompt_version": self.prompt_loader.version if self.prompt_loader else None,
+                },
+                "status": "LLM_RESULT",
+                "variant": "A"
+            }
+        except Exception as exc:
+            logger.error(f"LLM call failed: {exc}")
+            fallback = build_fallback_response(reason="llm_failure")
+            fallback["metadata"].update({"error": str(exc), "source": "llm"})
+            return {"triggered": True, **fallback}
+
+    # -----------------------------------------------------------------
+    # Supporting methods
+    # -----------------------------------------------------------------
     def _retain_rule_result(self, request: LLMIntentRequest) -> Dict[str, Any]:
         """Return rule-based classification directly."""
         return {
@@ -213,45 +188,6 @@ class RequestHandler:
             "status": "RULE_CONFIDENT",
             "variant": "A"
         }
-=======
-        request_body = {
-            "messages": self.build_messages(payload),
-            "temperature": opts.get("temperature", getattr(self.client, "temperature", 0.3)),
-            "max_tokens": opts.get("max_tokens", getattr(self.client, "max_tokens", 400)),
-        }
-        
-        # Extract response from OpenAI client (it returns dict with 'response' key)
-        result = self.client.complete(request_body, **opts)
-        
-        # Handle OpenAI client response format
-        if "error" in result:
-            logger.error(f"OpenAI client error: {result}")
-            raise RuntimeError(f"OpenAI API error: {result.get('error', 'Unknown error')}")
-        
-        # Extract the actual response text/content
-        if "response" in result:
-            # OpenAI client returns {"response": "...", "latency_ms": ..., "usage": ...}
-            return {
-                "intent": None,  # Will be parsed
-                "intent_category": None,
-                "action_code": None,
-                "confidence": None,
-                "processing_time_ms": result.get("latency_ms"),
-                "reasoning": None,
-                "raw_response": result["response"],
-            }
-        else:
-            # Fallback: assume result is the response directly
-            return {
-                "intent": None,
-                "intent_category": None,
-                "action_code": None,
-                "confidence": None,
-                "processing_time_ms": None,
-                "reasoning": None,
-                "raw_response": result if isinstance(result, str) else str(result),
-            }
->>>>>>> da921c5f57fe9bded2d8dbac52a4ed6c262dae0b
 
     def _fallback_unclear_response(self, request: LLMIntentRequest) -> Dict[str, Any]:
         """Return fallback intent when LLM is uncertain or fails."""
@@ -305,58 +241,39 @@ class RequestHandler:
             "variant": "A"
         }
 
-<<<<<<< HEAD
     def _escalate_failure(self, request: LLMIntentRequest):
         """Escalate after all retries fail."""
         logging.critical(
             f"🚨 ESCALATION_NEEDED: LLM completely failed for input '{request.user_input}' "
             f"(rule_intent={request.rule_intent}, attempts={MAX_RETRIES})"
         )
-=======
+
+    # -----------------------------------------------------------------
+    # Message Builder (from other branch)
+    # -----------------------------------------------------------------
     def build_messages(self, payload: LLMIntentRequest) -> List[Dict[str, str]]:
         """
         Build message array for OpenAI ChatCompletion API.
-        
-        Uses system prompt and few-shot examples if available, otherwise
-        falls back to simple user message.
-        
-        Args:
-            payload: LLM intent request payload
-            
-        Returns:
-            List of message dictionaries with 'role' and 'content' keys
         """
         if self.prompt_loader is not None:
             try:
-                # Production mode: use system prompt + few-shot examples
                 messages = self.prompt_loader.build_messages(payload.user_input)
                 logger.debug(
-                    f"Built messages with system prompt and {len(self.prompt_loader.few_shot_examples)} "
-                    f"few-shot examples (version: {self.prompt_loader.version})"
+                    f"Built messages with system prompt and few-shot examples "
+                    f"(version: {self.prompt_loader.version})"
                 )
                 return messages
             except (PromptLoadError, Exception) as e:
-                logger.warning(
-                    f"Failed to use prompts, falling back to simple message: {e}"
-                )
-                # Fallback to simple message if prompt loading fails
-                return [
-                    {"role": "user", "content": payload.user_input}
-                ]
+                logger.warning(f"Failed to use prompts, fallback to simple message: {e}")
+                return [{"role": "user", "content": payload.user_input}]
         else:
-            # Fallback mode: simple user message only
-            logger.debug("Using simple user message (prompts not available)")
-            return [
-                {"role": "user", "content": payload.user_input}
-            ]
+            return [{"role": "user", "content": payload.user_input}]
 
     @staticmethod
     def _infer_category(action_code: Optional[str]) -> str:
         """Best-effort lookup of the category for a given action code."""
-
         if not action_code:
             return "SUPPORT_HELP"
-
         for category, codes in INTENT_CATEGORIES.items():
             if action_code in codes:
                 return category
@@ -364,4 +281,3 @@ class RequestHandler:
 
 
 __all__ = ["RequestHandler"]
->>>>>>> da921c5f57fe9bded2d8dbac52a4ed6c262dae0b
