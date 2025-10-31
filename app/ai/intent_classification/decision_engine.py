@@ -13,6 +13,10 @@ from app.ai.intent_classification.keyword_matcher import KeywordMatcher
 from app.ai.intent_classification.embedding_matcher import EmbeddingMatcher
 from app.ai.intent_classification.hybrid_classifier import HybridClassifier
 from app.ai.intent_classification import confidence_threshold
+<<<<<<< HEAD
+=======
+
+>>>>>>> 6bdce236d75757b4a514e17eac9ad00d1d7ea989
 # Optional LLM fallback
 try:
     from app.ai.llm_intent.request_handler import RequestHandler as _LLMHandler
@@ -31,6 +35,33 @@ class DecisionEngine:
     def __init__(self):
         print("⚙️ Initializing DecisionEngine...")
         self.keyword_matcher = KeywordMatcher()
+<<<<<<< HEAD
+=======
+        self.embedding_matcher = EmbeddingMatcher()
+        self._load_config()
+        print(f"✅ DecisionEngine Initialized (Active Variant: {ACTIVE_VARIANT})")
+
+    # -------------------------------------------------------------------------
+    # CONFIGURATION MANAGEMENT
+    # -------------------------------------------------------------------------
+    def _load_config(self):
+        """Load dynamic configuration from config manager or fallback to static."""
+        try:
+            rules = CONFIG_CACHE.get("rules", {}).get("rule_sets", {}).get(ACTIVE_VARIANT, {})
+            self.use_keywords = rules.get("use_keywords", True)
+            self.use_embedding = rules.get("use_embedding", True)
+            self.priority_threshold = rules.get("priority_threshold", PRIORITY_THRESHOLD)
+            self.kw_weight = rules.get("kw_weight", WEIGHTS["keyword"])
+            self.emb_weight = rules.get("emb_weight", WEIGHTS["embedding"])
+            print(f"📋 Loaded Config Variant '{ACTIVE_VARIANT}' → keywords={self.use_keywords}, embeddings={self.use_embedding}")
+        except Exception as e:
+            print(f"⚠️ Config load error ({e}) → using fallback defaults.")
+            self.use_keywords = True
+            self.use_embedding = True
+            self.priority_threshold = PRIORITY_THRESHOLD
+            self.kw_weight = WEIGHTS["keyword"]
+            self.emb_weight = WEIGHTS["embedding"]
+>>>>>>> 6bdce236d75757b4a514e17eac9ad00d1d7ea989
         # Lazy-load embedding matcher to avoid loading model when disabled or in tests
         self.embedding_matcher = None
         # Initialize hybrid classifier (weights will be updated from config)
@@ -116,6 +147,10 @@ class DecisionEngine:
 
         # --- Blending Results ---
         if self.use_keywords and self.use_embedding:
+<<<<<<< HEAD
+=======
+            blended_results = self._blend_results(keyword_results, embedding_results)
+>>>>>>> 6bdce236d75757b4a514e17eac9ad00d1d7ea989
             blended_results = self.hybrid_classifier.blend(keyword_results, embedding_results)
         elif self.use_keywords and keyword_results:
             blended_results = keyword_results
@@ -135,6 +170,69 @@ class DecisionEngine:
             print(f"✅ Confident result → {top_result['intent']} | Reason: {reason}")
             return self._build_response(reason, top_result)
         else:
+<<<<<<< HEAD
+=======
+            print(f"⚠️ Low Confidence ({reason}), triggering fallback...")
+            return self._fallback_low_confidence(blended_results, reason)
+
+    # -------------------------------------------------------------------------
+    # BLENDING LOGIC
+    # -------------------------------------------------------------------------
+    def _blend_results(self, kw_results: List[Dict], emb_results: List[Dict]) -> List[Dict]:
+        """Blend keyword and embedding scores using weighted logic."""
+        if not kw_results and not emb_results:
+            return []
+        if not kw_results:
+            return emb_results
+        if not emb_results:
+            return kw_results
+
+        intent_scores = {}
+
+        # Collect keyword results
+        for r in kw_results:
+            intent_id = r.get("id", r.get("intent"))
+            intent_scores[intent_id] = {
+                "keyword_score": r.get("score", 0.0),
+                "embedding_score": 0.0,
+                "keyword_result": r,
+                "embedding_result": None,
+            }
+
+        # Merge embedding results
+        for r in emb_results:
+            intent_id = r.get("id", r.get("intent"))
+            if intent_id in intent_scores:
+                intent_scores[intent_id]["embedding_score"] = r.get("score", 0.0)
+                intent_scores[intent_id]["embedding_result"] = r
+            else:
+                intent_scores[intent_id] = {
+                    "keyword_score": 0.0,
+                    "embedding_score": r.get("score", 0.0),
+                    "keyword_result": None,
+                    "embedding_result": r,
+                }
+
+        # Weighted score computation
+        blended_results = []
+        for intent_id, s in intent_scores.items():
+            blended_score = (s["keyword_score"] * self.kw_weight) + (s["embedding_score"] * self.emb_weight)
+            base = s["keyword_result"] if s["keyword_score"] >= s["embedding_score"] else s["embedding_result"]
+            if not base:
+                continue
+
+            result = base.copy()
+            result.update({
+                "score": blended_score,
+                "source": "blended",
+                "keyword_score": s["keyword_score"],
+                "embedding_score": s["embedding_score"],
+            })
+            blended_results.append(result)
+
+        blended_results.sort(key=lambda x: x["score"], reverse=True)
+        return blended_results
+>>>>>>> 6bdce236d75757b4a514e17eac9ad00d1d7ea989
             # Deterministic selection on low-confidence: pick top blended action
             print(f"⚠ Blended result is NOT confident. Reason: {reason}")
             # Attempt LLM fallback if available

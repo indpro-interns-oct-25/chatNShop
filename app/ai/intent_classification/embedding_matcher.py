@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+import logging
+>>>>>>> 6bdce236d75757b4a514e17eac9ad00d1d7ea989
 """
 embedding_matcher.py
 Implements pre-trained embedding-based semantic similarity matching for user intents.
@@ -23,6 +27,14 @@ class EmbeddingMatcher:
         EmbeddingMatcher handles semantic similarity searches.
         :param client: Optional vector database client (e.g., QdrantClient)
         """
+<<<<<<< HEAD
+=======
+        self.client = client
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
+
+    def search(self, query_vector, collection_name="intents", top_k=5):
+>>>>>>> 6bdce236d75757b4a514e17eac9ad00d1d7ea989
         print(f"🔄 Loading model '{model_name}'...")
         start_time = time.time()
         
@@ -101,9 +113,18 @@ class EmbeddingMatcher:
 
     def search(self, query: str, threshold: float = 0.60) -> List[Dict]:
         """
-        Matches user query to the closest intent using embeddings.
-        Returns a list of all intents and their scores with enhanced error handling.
+        Perform semantic search using the vector database client.
+        Returns a list of matches with their similarity scores.
         """
+        if not self.client:
+            self.logger.warning("⚠️ No vector DB client provided; returning mock search results.")
+            # Mock search result for development
+            return [
+                {
+                    "payload": {"intent": "SEARCH_PRODUCT"},
+                    "score": 0.95
+                }
+            ]
         try:
             # Enhanced query preprocessing
             if not query or not query.strip():
@@ -135,6 +156,16 @@ class EmbeddingMatcher:
             results.sort(key=lambda x: x['score'], reverse=True)
             return results
 
+<<<<<<< HEAD
+=======
+        try:
+            response = self.client.search(
+                collection_name=collection_name,
+                query_vector=query_vector,
+                limit=top_k
+            )
+            return response
+>>>>>>> 6bdce236d75757b4a514e17eac9ad00d1d7ea989
         except Exception as e:
             self.logger.error(f"❌ Error during vector search: {e}")
             return []

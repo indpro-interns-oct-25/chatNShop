@@ -44,6 +44,17 @@ wait_time = 3
 
 for i in range(retries):
     try:
+<<<<<<< HEAD
+=======
+        client = QdrantClient(QDRANT_URL, timeout=10)
+        client.get_collections()
+        qdrant_client = client
+        print(f"✅ Successfully connected to Qdrant on attempt {i + 1}.")
+        break
+    except Exception as e:
+        print(f"⚠️ Attempt {i + 1} failed: Could not connect to Qdrant.")
+        print(f"   Error: {e}")
+>>>>>>> 6bdce236d75757b4a514e17eac9ad00d1d7ea989
         if QDRANT_API_KEY:  # Authenticated connection
             qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
         else:  # Open access (legacy/no-auth)
@@ -62,6 +73,10 @@ for i in range(retries):
             print(f"   Retrying in {wait_time} seconds...")
             time.sleep(wait_time)
         else:
+<<<<<<< HEAD
+=======
+            print(f"❌ Failed to initialize Qdrant after {retries} attempts.")
+>>>>>>> 6bdce236d75757b4a514e17eac9ad00d1d7ea989
             print("FAILED to initialize Qdrant client after 5 attempts.")
 
 # --- End Qdrant Client Initialization ---
@@ -151,6 +166,7 @@ async def health_check() -> Dict[str, Any]:
         "version": os.getenv("APP_VERSION", "1.0.0"),
     }
 
+# --- START OF CLASSIFICATION ENDPOINT ---
 
 # 1. Define the input data model for classification
 class ClassificationInput(BaseModel):
@@ -252,6 +268,7 @@ async def classify_intent(user_input: ClassificationInput) -> ClassificationOutp
             intent=result.get("intent"),
         )
 
+<<<<<<< HEAD
     except Exception as e:
         # Log the error for debugging
         print(f"ERROR: An error occurred in /classify: {e}")
@@ -277,6 +294,9 @@ app.include_router(intent_router)
 
 
 # Global exception handler
+=======
+# --- Global Exception Handler ---
+>>>>>>> 6bdce236d75757b4a514e17eac9ad00d1d7ea989
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
