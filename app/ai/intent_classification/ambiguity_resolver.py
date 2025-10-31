@@ -33,12 +33,19 @@ except ImportError:
     from keywords.loader import load_keywords
 
 # ------------------ CONFIGURATION ------------------
-# Standardized confidence thresholds (addresses reviewer feedback)
-UNCLEAR_THRESHOLD = 0.4  # Below this = UNCLEAR (low confidence)
-MIN_CONFIDENCE = 0.6     # Above this = Valid intent (medium-high confidence)
-AMBIGUOUS_THRESHOLD = MIN_CONFIDENCE  # Multiple intents above this = AMBIGUOUS
+# Centralize thresholds via app.ai.config
+try:
+    from app.ai.config import UNCLEAR_THRESHOLD, MIN_CONFIDENCE
+except Exception:
+    UNCLEAR_THRESHOLD = 0.4
+    MIN_CONFIDENCE = 0.6
+AMBIGUOUS_THRESHOLD = MIN_CONFIDENCE
 
-LOG_FILE = "ambiguous_log.json"
+# Persist logs as JSON Lines for easy processing
+LOG_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "logs")
+LOG_DIR = os.path.abspath(LOG_DIR)
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOG_DIR, "ambiguous.jsonl")
 
 # ------------------ LOAD DATA FROM CNS-8 (aligned with CNS-7) ------------------
 # Load keyword dictionaries from CNS-8
@@ -54,22 +61,10 @@ INTENT_KEYWORDS = {
 # ------------------ FUNCTIONS ------------------
 
 def log_ambiguous_case(user_input, intent_scores):
-    """Log ambiguous or unclear user inputs for later review."""
+    """Append ambiguous/unclear cases as JSONL for later review."""
     entry = {"user_input": user_input, "intent_scores": intent_scores}
-
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, "r", encoding="utf-8") as file:
-            try:
-                data = json.load(file)
-            except json.JSONDecodeError:
-                data = []
-    else:
-        data = []
-
-    data.append(entry)
-
-    with open(LOG_FILE, "w", encoding="utf-8") as file:
-        json.dump(data, file, indent=4)
+    with open(LOG_FILE, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
 def calculate_confidence(user_input, keywords):

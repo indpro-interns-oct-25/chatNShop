@@ -15,7 +15,9 @@ promotions_loyalty_intent_definitions = {
             "Available offers",
             "What deals are there?",
             "Promotional offers",
-            "Show me deals"
+            "Show me deals",
+            "Active promotions",
+            "What discounts can I get?"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY],
@@ -35,7 +37,9 @@ promotions_loyalty_intent_definitions = {
             "My coupons",
             "Coupon codes",
             "Available discount codes",
-            "Show discount codes"
+            "Show discount codes",
+            "List my coupon codes",
+            "Any coupons for me?"
         ],
         required_entities=[],
         optional_entities=[],
@@ -55,7 +59,9 @@ promotions_loyalty_intent_definitions = {
             "Apply deal",
             "Use this deal",
             "Apply offer",
-            "Use promotion"
+            "Use promotion",
+            "Apply discount code",
+            "Use my coupon"
         ],
         required_entities=[],
         optional_entities=[EntityType.COUPON_CODE],
@@ -75,7 +81,9 @@ promotions_loyalty_intent_definitions = {
             "Remove deal",
             "Take off deal",
             "Remove offer",
-            "Cancel offer"
+            "Cancel offer",
+            "Clear applied promo",
+            "Remove the discount"
         ],
         required_entities=[],
         optional_entities=[EntityType.COUPON_CODE],
@@ -95,7 +103,9 @@ promotions_loyalty_intent_definitions = {
             "Top sellers",
             "Most popular items",
             "Best selling items",
-            "Show me top sellers"
+            "Show me top sellers",
+            "Top selling right now",
+            "Best sellers list"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY],
@@ -115,7 +125,9 @@ promotions_loyalty_intent_definitions = {
             "Show new items",
             "What just came in?",
             "New arrivals",
-            "Show me latest"
+            "Show me latest",
+            "Just in products",
+            "Recently added items"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY],
@@ -135,7 +147,9 @@ promotions_loyalty_intent_definitions = {
             "Show sales",
             "Discounted items",
             "Sale products",
-            "Show me deals"
+            "Show me deals",
+            "Products on markdown",
+            "Show current discounts"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY, EntityType.PRICE_RANGE],
@@ -155,7 +169,9 @@ promotions_loyalty_intent_definitions = {
             "Points status",
             "How many loyalty points?",
             "Check points",
-            "Points balance"
+            "Points balance",
+            "View my points",
+            "Show loyalty balance"
         ],
         required_entities=[],
         optional_entities=[],
@@ -175,7 +191,9 @@ promotions_loyalty_intent_definitions = {
             "Spend points",
             "Use points for purchase",
             "Redeem points for discount",
-            "Convert points"
+            "Convert points",
+            "Apply points to order",
+            "Use points at checkout"
         ],
         required_entities=[],
         optional_entities=[],
@@ -195,7 +213,9 @@ promotions_loyalty_intent_definitions = {
             "Rewards status",
             "Check rewards balance",
             "Show me rewards",
-            "Rewards information"
+            "Rewards information",
+            "View my rewards",
+            "Any rewards available?"
         ],
         required_entities=[],
         optional_entities=[],
@@ -215,7 +235,9 @@ promotions_loyalty_intent_definitions = {
             "Claim available reward",
             "Redeem reward",
             "Claim my prize",
-            "Get reward"
+            "Get reward",
+            "Collect my reward",
+            "Use my reward now"
         ],
         required_entities=[],
         optional_entities=[],
@@ -235,7 +257,9 @@ promotions_loyalty_intent_definitions = {
             "Gift ideas",
             "Show gift options",
             "Available gifts",
-            "Gift suggestions"
+            "Gift suggestions",
+            "Recommend gift ideas",
+            "Best gifts to buy"
         ],
         required_entities=[],
         optional_entities=[EntityType.BUDGET],
@@ -255,7 +279,9 @@ promotions_loyalty_intent_definitions = {
             "Price drop notification",
             "Notify me of price changes",
             "Price alert setup",
-            "Price drop alerts"
+            "Price drop alerts",
+            "Track price changes",
+            "Send me price alerts"
         ],
         required_entities=[],
         optional_entities=[EntityType.PRODUCT_ID, EntityType.EMAIL],
@@ -275,7 +301,9 @@ promotions_loyalty_intent_definitions = {
             "Explain flash sales",
             "Flash sale info",
             "About flash sales",
-            "Flash sale explanation"
+            "Flash sale explanation",
+            "When is the next flash sale?",
+            "How do flash sales work?"
         ],
         required_entities=[],
         optional_entities=[],
