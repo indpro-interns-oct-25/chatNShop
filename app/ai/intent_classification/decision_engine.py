@@ -3,7 +3,9 @@ Decision Engine
 Handles hybrid rule-based + embedding + LLM fallback intent classification.
 Now includes resilience, caching, structured logging, and queue-based escalation.
 """
+
 import os
+import re
 from typing import Dict, Any
 import uuid
 import traceback
@@ -48,6 +50,15 @@ except Exception:
 # --- LOGGER ---
 logger = logging.getLogger("decision_engine")
 logger.setLevel(logging.INFO)
+
+# --- TEXT NORMALIZER ---
+def _clean_text(query: str) -> str:
+    """Normalize common typos, spacing issues, and casing."""
+    query = query.lower().strip()
+    query = re.sub(r"ing\s+", "ing", query)  # Fix 'show ing' → 'showing'
+    query = re.sub(r"\s+", " ", query)       # Remove extra spaces
+    query = re.sub(r"[^a-z0-9\s]", "", query)  # Clean punctuation
+    return query
 
 
 class DecisionEngine:
@@ -114,6 +125,9 @@ class DecisionEngine:
         """Executes hybrid search + LLM + cache fallback with resilience."""
         correlation_id = str(uuid.uuid4())
         logger.info(f"[{correlation_id}] 🔍 Starting intent classification for: '{query}'")
+
+        # 🧹 Clean query text to handle typos like “show ing”
+        query = _clean_text(query)
 
         # ✅ Cache read-through fallback
         if query in self._cache:
@@ -195,6 +209,11 @@ class DecisionEngine:
 
         if not blended_results:
             logger.warning(f"⚠ No match found for query '{query}'. Falling back.")
+            return self._fallback_generic(query)
+
+        # 🚦 Confidence threshold guard
+        if blended_results and blended_results[0].get("score", 0.0) < 0.3:
+            logger.warning(f"⚠ Low confidence score ({blended_results[0].get('score')}). Forcing fallback.")
             return self._fallback_generic(query)
 
         is_confident, reason = confidence_threshold.is_confident(blended_results)
