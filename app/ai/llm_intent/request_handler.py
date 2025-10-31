@@ -15,6 +15,9 @@ from .error_handler import handle_llm_exception
 from .openai_client import OpenAIClient
 from app.core.circuit_breaker import CircuitBreakerOpenError
 from .response_parser import LLMIntentResponse as ParsedLLMResponse, parse_llm_response
+import logging
+
+logger = logging.getLogger("request_handler")
 
 
 logger = logging.getLogger("app.llm_intent.request_handler")
@@ -57,8 +60,11 @@ class RequestHandler:
             }
 
         try:
-            raw_result = self._invoke_llm(payload)
+            # Pass through OpenAI params from payload.metadata or use default
+            openai_opts = payload.metadata.get("openai", {}) if hasattr(payload, 'metadata') else {}
+            raw_result = self._invoke_llm(payload, **openai_opts)
             parsed: ParsedLLMResponse = parse_llm_response(raw_result)
+            logger.info(f"LLM intent result: {parsed}")
             return {
                 "triggered": True,
                 "intent": parsed.intent,
@@ -75,43 +81,30 @@ class RequestHandler:
                 },
             }
         except Exception as exc:  # pragma: no cover - defensive safeguard
-            fallback = handle_llm_exception(exc, metadata)
+            logger.error(f"LLM call failed: {exc}")
+            fallback = build_fallback_response(reason="llm_failure")
+            fallback_metadata = fallback.get("metadata", {})
+            fallback_metadata.update({"error": str(exc), **metadata})
+            fallback["metadata"] = fallback_metadata
             return {"triggered": True, **fallback}
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _invoke_llm(self, payload: LLMIntentRequest) -> Dict[str, Any]:
+    def _invoke_llm(self, payload: LLMIntentRequest, **opts) -> Dict[str, Any]:
         """Call the configured LLM client or fall back to simulation."""
 
         if self.client is None:
             return self._simulate_llm_response(payload)
 
-        messages = self._build_messages(payload)
-        client_payload = self._prepare_client_payload(payload, messages)
-        logger.debug("Dispatching LLM payload: %s", client_payload)
-        return self.client.complete(client_payload)
-
-    def _build_messages(self, payload: LLMIntentRequest) -> List[Dict[str, str]]:
-        system_prompt = os.getenv(
-            "OPENAI_SYSTEM_PROMPT",
-            "You are an intent classifier for an e-commerce assistant. Respond in JSON.",
-        )
-
-        user_context = []
-        if payload.context_snippets:
-            snippet_block = "\n".join(f"- {snippet}" for snippet in payload.context_snippets)
-            user_context.append(f"Context:\n{snippet_block}")
-
-        if payload.metadata:
-            user_context.append(f"Metadata: {payload.metadata}")
-
-        user_payload = {
-            "rule_intent": payload.rule_intent,
-            "action_code": payload.action_code,
-            "top_confidence": payload.top_confidence,
-            "next_best_confidence": payload.next_best_confidence,
+        request_body = {
+            "model": self.client.model_name,
+            "timeout_ms": getattr(self.client, "timeout", 30.0)*1000,
+            "messages": self.build_messages(payload),
+            "temperature": opts.get("temperature", self.client.temperature),
+            "max_tokens": opts.get("max_tokens", self.client.max_tokens),
+            "metadata": payload.metadata,
         }
 
         instruction = (
@@ -154,25 +147,11 @@ class RequestHandler:
             "reasoning": "Simulated LLM output (no API client configured)",
         }
 
-    def _prepare_client_payload(
-        self,
-        payload: LLMIntentRequest,
-        messages: List[Dict[str, str]],
-    ) -> Dict[str, Any]:
-        """Construct the OpenAI client payload with required diagnostics."""
-
-        metadata_block: Dict[str, Any] = dict(payload.metadata or {})
-        metadata_block.setdefault("rule_intent", payload.rule_intent)
-        metadata_block.setdefault("action_code", payload.action_code)
-        metadata_block.setdefault("top_confidence", payload.top_confidence)
-        metadata_block.setdefault("next_best_confidence", payload.next_best_confidence)
-
-        return {
-            "user_input": payload.user_input,
-            "context": list(payload.context_snippets or []),
-            "metadata": metadata_block,
-            "messages": messages,
-        }
+    def build_messages(self, payload: LLMIntentRequest):
+        # Simple translation: just wrap user_input as user message
+        return [
+            {"role": "user", "content": payload.user_input}
+        ]
 
     @staticmethod
     def _infer_category(action_code: Optional[str]) -> str:

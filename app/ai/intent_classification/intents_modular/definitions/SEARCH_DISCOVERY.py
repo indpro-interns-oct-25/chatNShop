@@ -15,7 +15,10 @@ search_discovery_intent_definitions = {
             "I need a coffee maker",
             "Looking for winter jackets",
             "Can you find me a camera?",
-            "Show me gaming laptops"
+            "Show me gaming laptops",
+            "Find products matching my query",
+            "Search for this item",
+            "Look up this product"
         ],
         required_entities=[EntityType.PRODUCT_QUERY],
         optional_entities=[EntityType.CATEGORY, EntityType.BRAND, EntityType.PRICE_RANGE],
@@ -35,7 +38,9 @@ search_discovery_intent_definitions = {
             "I'm looking at books",
             "Display kitchen items",
             "Show me beauty products",
-            "I want to see toys"
+            "I want to see toys",
+            "Browse this category",
+            "Show items in this category"
         ],
         required_entities=[EntityType.CATEGORY],
         optional_entities=[EntityType.PRICE_RANGE, EntityType.BRAND],
@@ -55,7 +60,9 @@ search_discovery_intent_definitions = {
             "I'm looking for Sony headphones",
             "Display Canon cameras",
             "Show me Toyota cars",
-            "I want Levi's jeans"
+            "I want Levi's jeans",
+            "Browse by this brand",
+            "Show products from this brand"
         ],
         required_entities=[EntityType.BRAND],
         optional_entities=[EntityType.CATEGORY, EntityType.PRICE_RANGE],
@@ -75,7 +82,9 @@ search_discovery_intent_definitions = {
             "I'm looking for watches under $200",
             "Display headphones under $100",
             "Show me tablets between $300 and $600",
-            "I want books under $20"
+            "I want books under $20",
+            "Show items within this price range",
+            "Filter by price"
         ],
         required_entities=[EntityType.PRICE_RANGE],
         optional_entities=[EntityType.CATEGORY, EntityType.BRAND],
@@ -95,7 +104,9 @@ search_discovery_intent_definitions = {
             "I'm looking for green bags",
             "Display silver watches",
             "Show me purple headphones",
-            "I want yellow shirts"
+            "I want yellow shirts",
+            "Items in this colour",
+            "Show colour options in products"
         ],
         required_entities=[EntityType.COLOR],
         optional_entities=[EntityType.CATEGORY, EntityType.BRAND],
@@ -115,7 +126,9 @@ search_discovery_intent_definitions = {
             "I'm looking for size 32 jeans",
             "Display small bags",
             "Show me extra large hoodies",
-            "I want size 8 dresses"
+            "I want size 8 dresses",
+            "Filter by size",
+            "Show available sizes in products"
         ],
         required_entities=[EntityType.SIZE],
         optional_entities=[EntityType.CATEGORY, EntityType.COLOR],
@@ -135,7 +148,9 @@ search_discovery_intent_definitions = {
             "I'm looking for well-reviewed books",
             "Display highly rated headphones",
             "Show me best rated cameras",
-            "I want products with good reviews"
+            "I want products with good reviews",
+            "Filter by rating",
+            "Show items above this star rating"
         ],
         required_entities=[EntityType.REVIEW_RATING],
         optional_entities=[EntityType.CATEGORY, EntityType.BRAND],
@@ -155,7 +170,9 @@ search_discovery_intent_definitions = {
             "I'm looking for sale prices",
             "Display discounted electronics",
             "Show me items with offers",
-            "I want products on promotion"
+            "I want products on promotion",
+            "Show current deals",
+            "Filter to on-sale items"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY, EntityType.BRAND, EntityType.PRICE_RANGE],
@@ -175,7 +192,9 @@ search_discovery_intent_definitions = {
             "I want to see popular products",
             "Display trending electronics",
             "Show me viral products",
-            "What's everyone buying?"
+            "What's everyone buying?",
+            "Popular this week",
+            "Hot right now"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY],
@@ -195,7 +214,9 @@ search_discovery_intent_definitions = {
             "I want to see new releases",
             "Display newest arrivals",
             "Show me just added items",
-            "What's the latest?"
+            "What's the latest?",
+            "Recently added products",
+            "Newly released items"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY, EntityType.BRAND],
@@ -215,7 +236,9 @@ search_discovery_intent_definitions = {
             "I want similar options",
             "Display related products",
             "Show me alternatives",
-            "Find products like this one"
+            "Find products like this one",
+            "Products similar to this",
+            "More like this"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[EntityType.CATEGORY, EntityType.BRAND],
@@ -235,7 +258,9 @@ search_discovery_intent_definitions = {
             "I want to see featured deals",
             "Display spotlight products",
             "Show me recommended items",
-            "What's being featured?"
+            "What's being featured?",
+            "Featured this week",
+            "Spotlighted products"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY],
@@ -255,7 +280,9 @@ search_discovery_intent_definitions = {
             "I want to see new items",
             "Display just arrived products",
             "Show me fresh arrivals",
-            "What's newly available?"
+            "What's newly available?",
+            "New products today",
+            "Just in items"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY, EntityType.BRAND],
@@ -275,7 +302,9 @@ search_discovery_intent_definitions = {
             "I want best-selling products",
             "Display top performers",
             "Show me chart toppers",
-            "What's the best seller?"
+            "What's the best seller?",
+            "Top selling products",
+            "Best sellers right now"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY, EntityType.BRAND],
@@ -295,7 +324,9 @@ search_discovery_intent_definitions = {
             "I want to see sales",
             "Display items on sale",
             "Show me discounted products",
-            "What's on special offer?"
+            "What's on special offer?",
+            "Show active promotions",
+            "Products marked down"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY, EntityType.BRAND, EntityType.PRICE_RANGE],
@@ -316,7 +347,9 @@ search_discovery_intent_definitions = {
             "I need recommendations",
             "What would you suggest?",
             "Give me some ideas",
-            "What's recommended for me?"
+            "What's recommended for me?",
+            "Suggest products for me",
+            "Any product suggestions?"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY, EntityType.BUDGET, EntityType.PREFERENCES],
@@ -336,7 +369,9 @@ search_discovery_intent_definitions = {
             "What do you think I'd like?",
             "Give me personal picks",
             "Show me tailored suggestions",
-            "What matches my taste?"
+            "What matches my taste?",
+            "Recommendations based on my history",
+            "Suggest items for my profile"
         ],
         required_entities=[],
         optional_entities=[EntityType.USER_ID, EntityType.PREFERENCES],
@@ -356,7 +391,9 @@ search_discovery_intent_definitions = {
             "What else would I like?",
             "Recommend alternatives",
             "Show me related suggestions",
-            "What's in the same style?"
+            "What's in the same style?",
+            "Similar items to this",
+            "More like this product"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[EntityType.CATEGORY, EntityType.BRAND],
@@ -376,7 +413,9 @@ search_discovery_intent_definitions = {
             "Show me matching products",
             "What accessories do I need?",
             "Recommend add-ons",
-            "What completes this set?"
+            "What completes this set?",
+            "Complements for this item",
+            "Products that go together"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[EntityType.CATEGORY],
@@ -396,7 +435,9 @@ search_discovery_intent_definitions = {
             "Display my picks",
             "View my recommendations",
             "Show me suggested items",
-            "See what's recommended"
+            "See what's recommended",
+            "My suggested products",
+            "Recommendations for me"
         ],
         required_entities=[],
         optional_entities=[EntityType.USER_ID],
@@ -416,7 +457,9 @@ search_discovery_intent_definitions = {
             "Show featured products",
             "View highlighted items",
             "See editor's picks",
-            "Show me spotlight items"
+            "Show me spotlight items",
+            "Today's featured picks",
+            "Featured selections"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY],
@@ -436,7 +479,9 @@ search_discovery_intent_definitions = {
             "Show me deals",
             "View offers",
             "See what's on promotion",
-            "Show me specials"
+            "Show me specials",
+            "Active promo offers",
+            "All running deals"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY, EntityType.BRAND],
@@ -457,7 +502,9 @@ search_discovery_intent_definitions = {
             "Under $500",
             "Over $1000",
             "Price filter",
-            "Show cheaper options"
+            "Show cheaper options",
+            "Limit results to this budget",
+            "Only items within this price"
         ],
         required_entities=[EntityType.PRICE_RANGE],
         optional_entities=[EntityType.CATEGORY],
@@ -477,7 +524,9 @@ search_discovery_intent_definitions = {
             "4 star and above",
             "Top rated only",
             "Highly rated products",
-            "Filter by stars"
+            "Filter by stars",
+            "Only show items above this rating",
+            "Minimum 4 stars"
         ],
         required_entities=[EntityType.REVIEW_RATING],
         optional_entities=[EntityType.CATEGORY],
@@ -497,7 +546,9 @@ search_discovery_intent_definitions = {
             "Samsung only",
             "Brand filter",
             "Show me this brand",
-            "Filter to this brand"
+            "Filter to this brand",
+            "Only this brand",
+            "Restrict results to brand"
         ],
         required_entities=[EntityType.BRAND],
         optional_entities=[EntityType.CATEGORY],
@@ -517,7 +568,9 @@ search_discovery_intent_definitions = {
             "Show me what's available",
             "Filter stock status",
             "Only available items",
-            "Show in stock items"
+            "Show in stock items",
+            "Exclude out of stock",
+            "Available for purchase"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY],
@@ -537,7 +590,9 @@ search_discovery_intent_definitions = {
             "Blue products only",
             "Filter to this color",
             "Show me this color",
-            "Only white items"
+            "Only white items",
+            "Restrict to this colour",
+            "Items in selected color"
         ],
         required_entities=[EntityType.COLOR],
         optional_entities=[EntityType.CATEGORY],
@@ -557,7 +612,9 @@ search_discovery_intent_definitions = {
             "Filter to this size",
             "Show me this size",
             "Only size 10",
-            "Large items only"
+            "Large items only",
+            "Restrict to this size",
+            "Items in selected size"
         ],
         required_entities=[EntityType.SIZE],
         optional_entities=[EntityType.CATEGORY],
@@ -577,7 +634,9 @@ search_discovery_intent_definitions = {
             "Filter to sales",
             "Show me deals only",
             "Only sale items",
-            "Filter by offers"
+            "Filter by offers",
+            "Items with markdowns",
+            "Show discounted products only"
         ],
         required_entities=[],
         optional_entities=[EntityType.CATEGORY],
@@ -597,7 +656,9 @@ search_discovery_intent_definitions = {
             "Apply current filters",
             "Use filters",
             "Apply all filters",
-            "Filter with these settings"
+            "Filter with these settings",
+            "Run with selected filters",
+            "Apply selected options"
         ],
         required_entities=[],
         optional_entities=[EntityType.FILTER_CRITERIA],
@@ -617,7 +678,9 @@ search_discovery_intent_definitions = {
             "Clear my filters",
             "Remove current filters",
             "Clear all filters",
-            "Reset my selections"
+            "Reset my selections",
+            "Clear every filter",
+            "Reset applied filters"
         ],
         required_entities=[],
         optional_entities=[],
@@ -637,7 +700,9 @@ search_discovery_intent_definitions = {
             "Clear color filter",
             "Remove size filter",
             "Clear this selection",
-            "Remove this option"
+            "Remove this option",
+            "Clear selected filter",
+            "Delete this filter"
         ],
         required_entities=[],
         optional_entities=[EntityType.FILTER_CRITERIA],
@@ -658,7 +723,9 @@ search_discovery_intent_definitions = {
             "Price high to low",
             "Sort by cost",
             "Order by price range",
-            "Sort by price ascending"
+            "Sort by price ascending",
+            "Sort by price descending",
+            "Cheapest first / Most expensive first"
         ],
         required_entities=[],
         optional_entities=[EntityType.SORT_CRITERIA],
@@ -678,7 +745,9 @@ search_discovery_intent_definitions = {
             "Most bought first",
             "Sort by sales",
             "Popular items first",
-            "Order by demand"
+            "Order by demand",
+            "Trending first",
+            "Most viewed first"
         ],
         required_entities=[],
         optional_entities=[],
@@ -698,7 +767,9 @@ search_discovery_intent_definitions = {
             "Most recent first",
             "Sort by date",
             "Newest items first",
-            "Order by release date"
+            "Order by release date",
+            "Latest arrivals first",
+            "Newly added first"
         ],
         required_entities=[],
         optional_entities=[],
@@ -718,7 +789,9 @@ search_discovery_intent_definitions = {
             "Best rated first",
             "Sort by reviews",
             "Top rated first",
-            "Order by score"
+            "Order by score",
+            "Most stars first",
+            "Highest score first"
         ],
         required_entities=[],
         optional_entities=[],
@@ -738,7 +811,9 @@ search_discovery_intent_definitions = {
             "Show grid view",
             "Switch to grid",
             "Grid display",
-            "View grid style"
+            "View grid style",
+            "Use grid layout",
+            "Display in grid"
         ],
         required_entities=[],
         optional_entities=[],
@@ -758,7 +833,9 @@ search_discovery_intent_definitions = {
             "Show list view",
             "Switch to list",
             "List display",
-            "View list style"
+            "View list style",
+            "Use list layout",
+            "Display in list"
         ],
         required_entities=[],
         optional_entities=[],
@@ -780,7 +857,9 @@ search_discovery_intent_definitions = {
             "Metal tools",
             "Glass products",
             "Ceramic items",
-            "Fabric materials"
+            "Fabric materials",
+            "Products by material type",
+            "Items made from this material"
         ],
         required_entities=[EntityType.MATERIAL],
         optional_entities=[EntityType.CATEGORY, EntityType.BRAND],
@@ -800,7 +879,9 @@ search_discovery_intent_definitions = {
             "Best matches first",
             "Most relevant items",
             "Sort by best match",
-            "Relevance order"
+            "Relevance order",
+            "Highest relevance first",
+            "Order by best match"
         ],
         required_entities=[],
         optional_entities=[],

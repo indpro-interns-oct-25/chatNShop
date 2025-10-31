@@ -1,298 +1,170 @@
-
-from __future__ import annotations
-
-import json
-import logging
 import os
-import re
 import time
-from typing import Any, Dict, List, Optional, Sequence
+import logging
+from typing import Any, Dict, Optional
+import openai
+import threading
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, RetryError
 
-from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI, OpenAIError, RateLimitError
+logger = logging.getLogger("openai_client")
+logger.setLevel(logging.INFO)
 
-TARGET_P95_LATENCY_MS: int = 2000
-"""LLM requests must complete within two seconds at the 95th percentile."""
+# ========== Circuit Breaker State ==========
+class CircuitBreaker:
+    def __init__(self, max_failures=3, reset_timeout=60):
+        self.max_failures = max_failures
+        self.failures = 0
+        self.lock = threading.Lock()
+        self.tripped = False
+        self.trip_time = 0
+        self.reset_timeout = reset_timeout
 
-MAX_REQUEST_COST_USD: float = 0.02
-"""Per-call budget guardrail to keep usage within monthly allocations."""
+    def call(self, func, *args, **kwargs):
+        with self.lock:
+            if self.tripped and (time.time() - self.trip_time) < self.reset_timeout:
+                raise RuntimeError("Circuit breaker open: refusing to call OpenAI API")
+            elif self.tripped:
+                # Cooldown expired: reset
+                self.tripped = False
+                self.failures = 0
 
-DEFAULT_TEMPERATURE: float = 0.2
-DEFAULT_MAX_TOKENS: int = 600
-DEFAULT_TIMEOUT_SECONDS: float = 15.0
-DEFAULT_MAX_RETRIES: int = 3
-DEFAULT_BACKOFF_FACTOR: float = 0.75
-MAX_BACKOFF_SECONDS: float = 8.0
+        try:
+            out = func(*args, **kwargs)
+        except Exception as e:
+            with self.lock:
+                self.failures += 1
+                if self.failures >= self.max_failures:
+                    self.tripped = True
+                    self.trip_time = time.time()
+                    logger.error(f"OpenAI circuit breaker tripped: {e}")
+            raise
+        else:
+            with self.lock:
+                self.failures = 0
+            return out
 
-
-SYSTEM_PROMPT: str = (
-    "You are an intent classification engine for an e-commerce support assistant. "
-    "Return ONLY a compact JSON object with the keys: intent, intent_category, action_code, "
-    "confidence, reasoning (optional), and processing_time_ms (optional). Confidence must be a "
-    "float between 0 and 1. Use intent_category and action_code that best align with the user input. "
-    "Do not include Markdown, explanations, or additional text outside the JSON object."
-)
-
-
+# ========== Main Client ==========
 class OpenAIClient:
-    """Wrapper around the OpenAI SDK to support dependency injection in tests."""
-
+    """
+    Advanced OpenAI API wrapper with authentication, retry, circuit breaker, logging, and config management.
+    """
     def __init__(
         self,
-        api_key: str,
-        model_name: str,
-        timeout_ms: int = TARGET_P95_LATENCY_MS,
-        *,
-        temperature: float = DEFAULT_TEMPERATURE,
-        max_tokens: int = DEFAULT_MAX_TOKENS,
-        max_retries: int = DEFAULT_MAX_RETRIES,
-        backoff_factor: float = DEFAULT_BACKOFF_FACTOR,
-        max_backoff_seconds: float = MAX_BACKOFF_SECONDS,
-        logger: Optional[logging.Logger] = None,
-        client: Optional[OpenAI] = None,
+        api_key: Optional[str] = None,
+        model_name: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        timeout: Optional[float] = None,
+        retry_attempts: int = 3,
+        circuit_max_failures: int = 3,
+        circuit_cooldown: int = 60,  # seconds
+        log_calls: bool = True,
     ) -> None:
-        self.api_key = api_key
-        self.model_name = model_name
-        self.timeout_ms = timeout_ms
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        self.max_retries = max_retries
-        self.backoff_factor = backoff_factor
-        self.max_backoff_seconds = max_backoff_seconds
-        self.logger = logger or logging.getLogger(__name__)
-        self._client = client or OpenAI(api_key=api_key)
-        self.timeout_seconds = max(timeout_ms / 1000, 0.1)
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.model_name = model_name or os.getenv("OPENAI_MODEL", "gpt-4-turbo")
+        self.temperature = temperature if temperature is not None else float(os.getenv("OPENAI_TEMPERATURE", "0.3"))
+        self.max_tokens = max_tokens if max_tokens is not None else int(os.getenv("OPENAI_MAX_TOKENS", "400"))
+        self.timeout = timeout or float(os.getenv("OPENAI_TIMEOUT_SECS", "30"))
+        self.retry_attempts = retry_attempts
+        self.circuit_breaker = CircuitBreaker(max_failures=circuit_max_failures, reset_timeout=circuit_cooldown)
+        self.log_calls = log_calls
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-    def complete(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Send a completion request to the OpenAI API with retries and logging."""
+        openai.api_key = self.api_key
 
-        user_input = self._get_required(payload, "user_input")
-        context_snippets = payload.get("context", [])
-        metadata = payload.get("metadata", {})
-        request_model = payload.get("model") or self.model_name
-        temperature = float(payload.get("temperature", self.temperature))
-        max_tokens = int(payload.get("max_tokens", self.max_tokens))
+    # === RETRY/Timeout decorator ===
+    def _retry_decorator(self, method):
+        return retry(
+            wait=wait_exponential(multiplier=1, min=2, max=15),
+            stop=stop_after_attempt(self.retry_attempts),
+            retry=retry_if_exception_type((openai.error.RateLimitError, openai.error.APIError, openai.error.Timeout)),
+            reraise=True,
+        )(method)
 
-        attempt = 0
-        while True:
-            attempt += 1
-            self.logger.info(
-                "Dispatching OpenAI completion",
-                extra={
-                    "event": "openai_completion_request",
-                    "model": request_model,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "attempt": attempt,
-                    "context_size": len(context_snippets),
-                    "user_input_preview": user_input[:120],
-                },
-            )
-
-            try:
-                messages = self._build_messages(user_input, context_snippets, metadata)
-                start = time.perf_counter()
-                response = self._client.chat.completions.create(
-                    model=request_model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    timeout=self.timeout_seconds,
-                )
-                latency_ms = (time.perf_counter() - start) * 1000
-                parsed = self._parse_response(response, latency_ms)
-                self.logger.info(
-                    "OpenAI completion successful",
-                    extra={
-                        "event": "openai_completion_success",
-                        "model": request_model,
-                        "latency_ms": round(latency_ms, 2),
-                        "finish_reason": response.choices[0].finish_reason,
-                    },
-                )
-                return parsed
-            except RateLimitError as exc:
-                self._log_exception(exc, attempt, request_model, will_retry=True, code="rate_limit")
-                if not self._maybe_retry(attempt):
-                    raise
-            except (APITimeoutError, APIConnectionError) as exc:
-                self._log_exception(exc, attempt, request_model, will_retry=True, code="transient")
-                if not self._maybe_retry(attempt):
-                    raise
-            except APIStatusError as exc:
-                # Retry 429/5xx responses; otherwise propagate immediately.
-                should_retry = exc.status_code in {429, 500, 502, 503, 504}
-                self._log_exception(
-                    exc,
-                    attempt,
-                    request_model,
-                    will_retry=should_retry,
-                    code=f"status_{exc.status_code}",
-                )
-                if should_retry:
-                    if not self._maybe_retry(attempt):
-                        raise
-                else:
-                    raise
-            except OpenAIError as exc:
-                self._log_exception(exc, attempt, request_model, will_retry=False, code="openai_error")
-                raise
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-    def _build_messages(
-        self,
-        user_input: str,
-        context_snippets: Sequence[str],
-        metadata: Dict[str, Any],
-    ) -> List[Dict[str, str]]:
-        context_section = (
-            "\n".join(f"- {str(snippet)}" for snippet in context_snippets)
-            if context_snippets
-            else "None"
-        )
-        if metadata:
-            try:
-                metadata_section = json.dumps(metadata, ensure_ascii=False, indent=2)
-            except TypeError:
-                metadata_section = str(metadata)
-        else:
-            metadata_section = "None"
-
-        user_prompt = (
-            "User utterance:\n"
-            f"{user_input}\n\n"
-            "Context snippets (if any):\n"
-            f"{context_section}\n\n"
-            "Metadata (diagnostics):\n"
-            f"{metadata_section}\n\n"
-            "Respond strictly with JSON following the required schema."
-        )
-
-        return [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ]
-
-    def _parse_response(self, response: Any, latency_ms: float) -> Dict[str, Any]:
-        if not response.choices:
-            raise ValueError("OpenAI response missing choices")
-
-        message = response.choices[0].message
-        content = (message.content or "").strip()
-        data = self._extract_json(content)
-
-        required_keys = {"intent", "intent_category", "action_code", "confidence"}
-        missing = required_keys - data.keys()
-        if missing:
-            raise ValueError(f"LLM response missing required keys: {sorted(missing)}")
-
-        if "processing_time_ms" not in data or data["processing_time_ms"] in (None, ""):
-            data["processing_time_ms"] = round(latency_ms, 2)
-
-        confidence = float(data["confidence"])
-        data["confidence"] = max(0.0, min(confidence, 1.0))
-
-        return {
-            "intent": str(data["intent"]),
-            "intent_category": str(data["intent_category"]),
-            "action_code": str(data["action_code"]),
-            "confidence": data["confidence"],
-            "reasoning": data.get("reasoning"),
-            "processing_time_ms": data.get("processing_time_ms"),
+    # === Call the API ===
+    def _call_openai(self, messages: list, temperature=None, max_tokens=None, stream=False, extra_kwargs=None) -> Dict[str, Any]:
+        """Single wrapped call. Handles exceptions for outer retry and CB."""
+        # Compose parameters:
+        kwargs = {
+            "model": self.model_name,
+            "messages": messages,
+            "temperature": temperature if temperature is not None else self.temperature,
+            "max_tokens": max_tokens if max_tokens is not None else self.max_tokens,
+            "timeout": self.timeout,
+            "stream": stream,
         }
-
-    def _extract_json(self, content: str) -> Dict[str, Any]:
+        if extra_kwargs:
+            kwargs.update(extra_kwargs)
+        t0 = time.time()
         try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            pass
+            response = openai.ChatCompletion.create(**kwargs)
+            latency = time.time() - t0
+            # Parse and validate response:
+            result = self._parse_response(response)
+            usage = response.get("usage", {})
+            # Log
+            if self.log_calls:
+                logger.info(f"OpenAI call | model={self.model_name} | temp={kwargs['temperature']} | max_tokens={kwargs['max_tokens']} | latency={latency:.2f}s | prompt_tokens={usage.get('prompt_tokens','?')} | completion_tokens={usage.get('completion_tokens','?')}")
+            return {"latency_ms": int(latency * 1000), "response": result, "usage": usage}
+        except openai.error.RateLimitError as e:
+            logger.warning(f"OpenAI rate limit hit: {e}")
+            raise
+        except openai.error.Timeout as e:
+            logger.error(f"OpenAI timeout: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"OpenAI API error: {e}")
+            raise
 
-        match = re.search(r"\{.*\}", content, flags=re.DOTALL)
-        if not match:
-            raise ValueError("Unable to parse JSON from LLM response")
+    def complete(self, payload: Dict[str, Any], **opts) -> Dict[str, Any]:
+        """
+        Send a ChatCompletion request to OpenAI.
+        Accepts model/temperature/max_tokens/stream in payload/opts, with fallback to defaults.
+        Handles retries, logging, and error/timeout gracefully.
+        """
+        messages = payload["messages"]
+        temperature = payload.get("temperature") or opts.get("temperature")
+        max_tokens = payload.get("max_tokens") or opts.get("max_tokens")
+        stream = opts.get("stream", False)
+        extra_kwargs = opts.get("extra_kwargs")
+        retry_call = self._retry_decorator(lambda *a, **k: self._call_openai(*a, **k))
 
         try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError as exc:  # pragma: no cover - defensive
-            raise ValueError("Malformed JSON emitted by LLM") from exc
+            result = self.circuit_breaker.call(
+                retry_call,
+                messages,
+                temperature,
+                max_tokens,
+                stream,
+                extra_kwargs,
+            )
+            return result
+        except RetryError as r:
+            logger.error(f"OpenAIClient: Gave up after retries: {r.last_attempt.exception()}")
+            return {"error": str(r.last_attempt.exception()), "type": "retry_exhausted"}
+        except RuntimeError as cb:
+            return {"error": str(cb), "type": "circuit_open"}
+        except Exception as ex:
+            logger.error(f"OpenAIClient: Fatal error: {ex}")
+            return {"error": str(ex)}
 
-    def _maybe_retry(self, attempt: int) -> bool:
-        if attempt > self.max_retries:
-            return False
+    def _parse_response(self, response: Any):
+        """Parses and validates the LLM's response object from OpenAI."""
+        if isinstance(response, dict):
+            try:
+                # Standard OpenAI response
+                return response["choices"][0]["message"]["content"]
+            except Exception as e:
+                logger.error(f"Malformed OpenAI response: {e}")
+                raise ValueError("Malformed OpenAI response (missing choices.message.content)") from e
+        else:
+            logger.error(f"Malformed OpenAI response (not dict): {response}")
+            raise ValueError("Malformed OpenAI response (not dict)")
 
-        backoff_seconds = min(self.max_backoff_seconds, self.backoff_factor * (2 ** (attempt - 1)))
-        time.sleep(backoff_seconds)
-        return True
-
-    def _log_exception(
-        self,
-        exc: Exception,
-        attempt: int,
-        model: str,
-        *,
-        will_retry: bool,
-        code: str,
-    ) -> None:
-        self.logger.warning(
-            "OpenAI completion failed",
-            extra={
-                "event": "openai_completion_error",
-                "model": model,
-                "attempt": attempt,
-                "will_retry": will_retry,
-                "code": code,
-                "error_type": type(exc).__name__,
-                "error_message": str(exc),
-            },
-        )
-
-    @staticmethod
-    def _get_required(payload: Dict[str, Any], key: str) -> Any:
-        try:
-            return payload[key]
-        except KeyError as exc:  # pragma: no cover - defensive safeguard
-            raise ValueError(f"'{key}' is required in payload") from exc
-
-
-def build_openai_client_from_env(logger: Optional[logging.Logger] = None) -> Optional[OpenAIClient]:
-    """Factory that wires up ``OpenAIClient`` using environment variables."""
-
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        if logger:
-            logger.info("OPENAI_API_KEY not set – LLM intent requests will be simulated")
-        return None
-
-    model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    temperature = float(os.getenv("OPENAI_TEMPERATURE", DEFAULT_TEMPERATURE))
-    max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", DEFAULT_MAX_TOKENS))
-    timeout_seconds = float(os.getenv("OPENAI_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS))
-    max_retries = int(os.getenv("OPENAI_MAX_RETRIES", DEFAULT_MAX_RETRIES))
-    backoff_factor = float(os.getenv("OPENAI_RETRY_BACKOFF_BASE", DEFAULT_BACKOFF_FACTOR))
-    max_backoff_seconds = float(os.getenv("OPENAI_RETRY_BACKOFF_MAX", MAX_BACKOFF_SECONDS))
-
-    timeout_ms = int(timeout_seconds * 1000)
-
-    return OpenAIClient(
-        api_key=api_key,
-        model_name=model_name,
-        timeout_ms=timeout_ms,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        max_retries=max_retries,
-        backoff_factor=backoff_factor,
-        max_backoff_seconds=max_backoff_seconds,
-        logger=logger,
-    )
-
-
-__all__ = [
-    "TARGET_P95_LATENCY_MS",
-    "MAX_REQUEST_COST_USD",
-    "OpenAIClient",
-    "build_openai_client_from_env",
-]
+    # Optional: Provide info/probe endpoints
+    def status(self):
+        return {
+            "model": self.model_name,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "timeout": self.timeout,
+        }

@@ -14,14 +14,16 @@ from app.ai.config import PRIORITY_THRESHOLD, WEIGHTS  # Fallback config
 from app.ai.intent_classification.contracts import RuleDecision
 from app.ai.intent_classification.keyword_matcher import KeywordMatcher
 from app.ai.intent_classification.embedding_matcher import EmbeddingMatcher
+from app.ai.intent_classification.hybrid_classifier import HybridClassifier
 from app.ai.intent_classification import confidence_threshold
-from app.ai.llm_intent.confidence_calibrator import TriggerContext, should_trigger_llm
-from app.ai.llm_intent.trigger_manager import LLMTriggerManager
-from app.core.circuit_breaker import CircuitBreakerOpenError
-from app.monitoring.metrics import log_latency
-from app.schemas.llm_intent import LLMIntentRequest
-from app.utils.retry_logic import RetryExceededError
-
+# Optional LLM fallback
+try:
+    from app.ai.llm_intent.request_handler import RequestHandler as _LLMHandler
+    from app.schemas.llm_intent import LLMIntentRequest as _LLMReq
+except Exception:
+    _LLMHandler = None  # type: ignore
+    _LLMReq = None  # type: ignore
+# --- END CONFIG MANAGER INTEGRATION ---
 
 class DecisionEngine:
     """
@@ -36,10 +38,11 @@ class DecisionEngine:
         """
         print("Initializing DecisionEngine...")
         self.keyword_matcher = KeywordMatcher()
-        self.embedding_matcher = EmbeddingMatcher()
-        self._logger = logging.getLogger("app.ai.intent_classification.decision_engine")
-        self._llm_manager = LLMTriggerManager()
-
+        # Lazy-load embedding matcher to avoid loading model when disabled or in tests
+        self.embedding_matcher = None
+        # Initialize hybrid classifier (weights will be updated from config)
+        self.hybrid_classifier = HybridClassifier()
+        
         # Load settings from config manager (with fallback to static config)
         self._load_config_from_manager()
         print(f"✅ DecisionEngine Initialized: Settings loaded from config manager (variant: {ACTIVE_VARIANT})")
@@ -52,8 +55,9 @@ class DecisionEngine:
             # Import here to get fresh values
             from app.core.config_manager import CONFIG_CACHE, ACTIVE_VARIANT
             
-            # Try to get rules from config manager
-            rules = CONFIG_CACHE.get('rules', {})
+            # Try to get rules from config manager (supports nested schema: {"rules": {"rule_sets": {...}}})
+            rules_root = CONFIG_CACHE.get('rules', {})
+            rules = rules_root.get('rules', rules_root)
             rule_sets = rules.get('rule_sets', {})
             current_rules = rule_sets.get(ACTIVE_VARIANT, {})
             
@@ -61,24 +65,39 @@ class DecisionEngine:
             if current_rules:
                 self.use_embedding = current_rules.get('use_embedding', True)
                 self.use_keywords = current_rules.get('use_keywords', True)
-                print(f"📋 Using config manager rules for variant {ACTIVE_VARIANT}: embedding={self.use_embedding}, keywords={self.use_keywords}")
+                # Load dynamic weights/thresholds if present
+                self.kw_weight = current_rules.get('kw_weight', WEIGHTS.get('keyword', 0.6))
+                self.emb_weight = current_rules.get('emb_weight', WEIGHTS.get('embedding', 0.4))
+                self.priority_threshold = current_rules.get('priority_threshold', PRIORITY_THRESHOLD)
+                # Update classifier weights
+                self.hybrid_classifier.update_weights(self.kw_weight, self.emb_weight)
+                print(
+                    f"📋 Using config manager rules for variant {ACTIVE_VARIANT}: "
+                    f"embedding={self.use_embedding}, keywords={self.use_keywords}, "
+                    f"kw_weight={self.kw_weight}, emb_weight={self.emb_weight}, "
+                    f"threshold={self.priority_threshold}"
+                )
             else:
-                # Fallback to static config
+                # Fallback to static config (Variant A defaults)
                 self.use_embedding = True
                 self.use_keywords = True
-                self.priority_threshold = PRIORITY_THRESHOLD
-                self.kw_weight = WEIGHTS["keyword"]
-                self.emb_weight = WEIGHTS["embedding"]
-                print("📋 Using fallback static config")
+                self.priority_threshold = 0.85
+                self.kw_weight = 0.6
+                self.emb_weight = 0.4
+                # Update classifier weights
+                self.hybrid_classifier.update_weights(self.kw_weight, self.emb_weight)
+                print("📋 Using fallback static config (Variant A: kw=0.6, emb=0.4, threshold=0.85)")
                 
         except Exception as e:
-            # Fallback to static config on any error
+            # Fallback to static config on any error (Variant A)
             print(f"⚠️ Config manager error, using fallback: {e}")
             self.use_embedding = True
             self.use_keywords = True
-            self.priority_threshold = PRIORITY_THRESHOLD
-            self.kw_weight = WEIGHTS["keyword"]
-            self.emb_weight = WEIGHTS["embedding"]
+            self.priority_threshold = 0.85
+            self.kw_weight = 0.6
+            self.emb_weight = 0.4
+            # Update classifier weights
+            self.hybrid_classifier.update_weights(self.kw_weight, self.emb_weight)
 
     def search(self, query: str) -> Dict[str, Any]:
 
@@ -123,11 +142,13 @@ class DecisionEngine:
 
         # Use embedding matching if enabled
         if self.use_embedding:
+            if self.embedding_matcher is None:
+                self.embedding_matcher = EmbeddingMatcher()
             embedding_results = self.embedding_matcher.search(query)
         
         # Blend results if both methods are enabled
         if self.use_keywords and self.use_embedding:
-            blended_results = self._blend_results(keyword_results, embedding_results)
+            blended_results = self.hybrid_classifier.blend(keyword_results, embedding_results)
         elif self.use_keywords and keyword_results:
             blended_results = keyword_results
         elif self.use_embedding and embedding_results:
@@ -210,26 +231,50 @@ class DecisionEngine:
             payload = self._maybe_trigger_llm(decision, query, pipeline_start)
             return payload
         else:
-            # Enhanced fallback for low confidence results
+            # Deterministic selection on low-confidence: pick top blended action
             print(f"⚠ Blended result is NOT confident. Reason: {reason}")
-
-            # If we have any results, return the best one with fallback status
-            if blended_results and blended_results[0]['score'] >= 0.1:
-                print(f"✅ Returning best available result as fallback")
-                decision = self._build_decision(
-                    status=f"FALLBACK_{reason}",
-                    intent=blended_results[0],
-                    candidates=blended_results,
-                    top_confidence=blended_results[0]['score'],
-                    next_best_confidence=blended_results[1]['score'] if len(blended_results) > 1 else 0.0,
-                    resolved_intent=blended_results[0].get('intent'),
-                    resolved_action=blended_results[0].get('id'),
-                    rule_latency_ms=self._stage_latency(rule_start),
-                    is_fallback=True,
-                )
-                payload = self._maybe_trigger_llm(decision, query, pipeline_start)
-                return payload
-
+            # Attempt LLM fallback if available
+            if _LLMHandler and _LLMReq:
+                try:
+                    handler = _LLMHandler()
+                    # Build minimal LLM request using top keyword/embedding confidences if present
+                    top_kw = keyword_results[0]['score'] if keyword_results else 0.0
+                    next_kw = keyword_results[1]['score'] if len(keyword_results) > 1 else 0.0
+                    llm_req = _LLMReq(
+                        user_input=query,
+                        rule_intent=blended_results[0]['id'] if blended_results else None,
+                        action_code=blended_results[0]['id'] if blended_results else None,
+                        top_confidence=float(top_kw),
+                        next_best_confidence=float(next_kw),
+                        is_fallback=True,
+                    )
+                    llm_out = handler.handle(llm_req)
+                    if llm_out and isinstance(llm_out, dict):
+                        # Return LLM-resolved action_code as final
+                        resolved = {
+                            "id": llm_out.get("action_code"),
+                            "intent": llm_out.get("action_code"),
+                            "score": llm_out.get("confidence", 0.0),
+                            "source": "llm",
+                            "reason": "llm_fallback"
+                        }
+                        return {
+                            "status": "LLM_FALLBACK",
+                            "intent": resolved,
+                            "config_variant": ACTIVE_VARIANT
+                        }
+                except Exception as _:
+                    pass
+            if blended_results:
+                # If multiple with close scores, prefer one with higher embedding_score
+                blended_results.sort(key=lambda x: (x.get('score', 0.0), x.get('embedding_score', 0.0)), reverse=True)
+                top = blended_results[0]
+                print("✅ Selecting top blended action deterministically")
+                return {
+                    "status": f"BLENDED_TOP_{reason}",
+                    "intent": top,
+                    "config_variant": ACTIVE_VARIANT
+                }
             # Final fallback to generic search
             print(f"⚠ No suitable results, returning generic search")
             return self._finalize_output(
@@ -249,73 +294,6 @@ class DecisionEngine:
                 pipeline_start=pipeline_start,
             )
 
-    def _blend_results(self, kw_results: List, emb_results: List) -> List[Dict]:
-        """
-        Implements sophisticated weighted scoring to combine results from both methods.
-        """
-        if not kw_results and not emb_results:
-            return []
-        
-        if not kw_results:
-            return emb_results
-        
-        if not emb_results:
-            return kw_results
-        
-        # Create a mapping of intent IDs to their scores from both methods
-        intent_scores = {}
-        
-        # Process keyword results
-        for result in kw_results:
-            intent_id = result.get('id', result.get('intent', 'unknown'))
-            score = result.get('score', 0.0)
-            intent_scores[intent_id] = {
-                'keyword_score': score,
-                'keyword_result': result,
-                'embedding_score': 0.0,
-                'embedding_result': None
-            }
-        
-        # Process embedding results
-        for result in emb_results:
-            intent_id = result.get('id', result.get('intent', 'unknown'))
-            score = result.get('score', 0.0)
-            
-            if intent_id in intent_scores:
-                intent_scores[intent_id]['embedding_score'] = score
-                intent_scores[intent_id]['embedding_result'] = result
-            else:
-                intent_scores[intent_id] = {
-                    'keyword_score': 0.0,
-                    'keyword_result': None,
-                    'embedding_score': score,
-                    'embedding_result': result
-                }
-        
-        # Calculate blended scores
-        blended_results = []
-        kw_weight = getattr(self, 'kw_weight', WEIGHTS["keyword"])
-        emb_weight = getattr(self, 'emb_weight', WEIGHTS["embedding"])
-        
-        for intent_id, scores in intent_scores.items():
-            # Weighted average of scores
-            blended_score = (scores['keyword_score'] * kw_weight +
-                             scores['embedding_score'] * emb_weight)
-
-            dominant_result = scores['keyword_result'] or scores['embedding_result']
-            dominant_source = 'keyword' if scores['keyword_result'] else 'embedding'
-
-            if dominant_result:
-                blended_result = dominant_result.copy()
-                blended_result['score'] = blended_score
-                blended_result['source'] = dominant_source
-                blended_result['keyword_score'] = scores['keyword_score']
-                blended_result['embedding_score'] = scores['embedding_score']
-                blended_results.append(blended_result)
-        
-        # Sort by blended score
-        blended_results.sort(key=lambda x: x['score'], reverse=True)
-        return blended_results
 
 
     def _build_decision(

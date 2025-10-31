@@ -10,8 +10,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 import uvicorn
+from pydantic import BaseModel, Field
+from typing import Any, Dict, Optional, List
 
 from app.api.v1 import intent
 from app.ai.intent_classification.decision_engine import get_intent_classification
@@ -27,6 +28,7 @@ load_dotenv()
 
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")  # NEW: support for Qdrant authentication
 PRODUCT_COLLECTION_NAME = "chatnshop_products"
 VECTOR_SIZE = 384
 
@@ -35,17 +37,27 @@ print(f"Attempting to connect to Qdrant at {QDRANT_URL}...")
 qdrant_client = None
 for attempt in range(1, 6):
     try:
-        client = QdrantClient(QDRANT_URL, timeout=10)
-        client.get_collections()
-        qdrant_client = client
-        print(f"Successfully connected to Qdrant on attempt {attempt}.")
+        if QDRANT_API_KEY:  # Authenticated connection
+            qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+        else:  # Open access (legacy/no-auth)
+            qdrant_client = QdrantClient(url=QDRANT_URL)
+        # Try a basic health check to trigger connection (list_collections: harmless)
+        qdrant_client.get_collections()
+        print(f"✅ Connected to Qdrant at {QDRANT_URL}")
         break
-    except Exception as exc:
-        print(f"Attempt {attempt} failed: {exc}")
-        if attempt == 5:
-            print("FAILED to initialize Qdrant client after 5 attempts.")
+    except Exception as e:
+        print(f"Attempt {i + 1} failed: Could not connect to Qdrant. Is the Docker container running?")
+        print(f"   Error detail: {e}")
+        # Print any body/response if available (for HTTP errors)
+        if hasattr(e, 'response') and getattr(e.response, 'content', None):
+            print(f"Raw response content:\n{e.response.content}")
+        if i < retries - 1:
+            print(f"   Retrying in {wait_time} seconds...")
+            time.sleep(wait_time)
         else:
-            time.sleep(3)
+            print("FAILED to initialize Qdrant client after 5 attempts.")
+
+# --- End Qdrant Client Initialization ---
 
 
 @asynccontextmanager
@@ -133,15 +145,103 @@ class ClassificationInput(BaseModel):
     text: str
 
 
-@app.post("/classify", tags=["Intent Classification"])
-async def classify_intent(user_input: ClassificationInput) -> Dict[str, Any]:
+class ClassificationOutput(BaseModel):
+    action_code: str = Field(..., description="Resolved action code")
+    confidence_score: float = Field(..., ge=0.0, le=1.0, description="Confidence (0-1)")
+    matched_keywords: List[str] = Field(default_factory=list, description="Matched keyword phrases")
+    original_text: str = Field(..., description="Original input text")
+    status: str = Field(..., description="Resolution status (e.g., CONFIDENT_KEYWORD, FALLBACK_*)")
+    intent: Optional[Dict[str, Any]] = Field(default=None, description="Raw top intent payload for debug")
+
+# 2. Create the classification POST endpoint
+@app.post(
+    "/classify",
+    tags=["Intent Classification"],
+    response_model=ClassificationOutput,
+    summary="Classify user input into an intent",
+    responses={
+        200: {
+            "description": "Classification result",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "action_code": "ADD_TO_CART",
+                        "confidence_score": 0.92,
+                        "matched_keywords": ["add to cart"],
+                        "original_text": "Add this to my cart",
+                        "status": "CONFIDENT_KEYWORD",
+                        "intent": {
+                            "id": "ADD_TO_CART",
+                            "score": 0.92,
+                            "source": "keyword",
+                        },
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "Classification Failed",
+                        "message": "An internal error occurred while processing the request.",
+                        "detail": "<error details>",
+                    }
+                }
+            },
+        },
+    },
+)
+async def classify_intent(user_input: ClassificationInput) -> ClassificationOutput:
+    """
+    Receives user text and returns the classified intent.
+    
+    This is the main endpoint for the intent classification service.
+    """
+    
     print(f"Received text for classification: {user_input.text}")
     try:
-        result = run_intent_pipeline(user_input.text)
+        # The classification function is synchronous (not async)
+        result = get_intent_classification(user_input.text)
+
+        # Normalize API output to include action_code, confidence_score, matched_keywords
+        top = result.get("intent", {}) if isinstance(result, dict) else {}
+        action_code = top.get("id") or top.get("intent")
+        confidence_score = top.get("score")
+        matched_kw = top.get("matched_text")
+        if action_code is not None:
+            result.setdefault("action_code", action_code)
+        if confidence_score is not None:
+            result.setdefault("confidence_score", confidence_score)
+        if matched_kw:
+            result.setdefault("matched_keywords", [matched_kw])
+
+        # Add original text to the response
         result["original_text"] = user_input.text
-        return result
-    except Exception as exc:
-        print(f"ERROR in /classify: {exc}")
+
+        # --- TODO: Add Qdrant Search Logic ---
+        # If the intent is "find_product" or similar,
+        # you would now:
+        # 1. Get the embedding for user_input.text (from your DecisionEngine or another service)
+        # 2. Use qdrant_client.search(...) to find matching products
+        # 3. Add the search results to the 'result' dictionary
+        # --- End TODO ---
+        
+        # Shape to response model
+        return ClassificationOutput(
+            action_code=result.get("action_code", "UNKNOWN_INTENT"),
+            confidence_score=float(result.get("confidence_score", 0.0)),
+            matched_keywords=result.get("matched_keywords", []),
+            original_text=user_input.text,
+            status=str(result.get("status", "UNKNOWN")),
+            intent=result.get("intent"),
+        )
+
+    except Exception as e:
+        # Log the error for debugging
+        print(f"ERROR: An error occurred in /classify: {e}")
+        # Return a structured error response to the user
         return JSONResponse(
             status_code=500,
             content={

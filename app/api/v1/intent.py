@@ -2,62 +2,62 @@
 
 from __future__ import annotations
 
-import logging
 import os
-from typing import Optional
+from fastapi import APIRouter, HTTPException
 
 from fastapi import APIRouter, HTTPException, status
 
 from app.ai.llm_intent.openai_client import OpenAIClient
 from app.core.circuit_breaker import CircuitBreakerOpenError
 from app.ai.llm_intent.request_handler import RequestHandler
-from app.schemas.llm_intent import LLMIntentRequest, LLMIntentResponse
+from app.ai.llm_intent.openai_client import OpenAIClient
+from app.schemas.llm_intent import LLMIntentRequest, LLMIntentResponse, LLMIntentSimpleRequest
+import logging
 
 
 logger = logging.getLogger("app.api.intent")
 
 router = APIRouter(prefix="/api/v1/llm-intent", tags=["LLM Intent"])
 
+# Instantiate with a real OpenAI client if environment variables are set
+openai_api_key = os.getenv("OPENAI_API_KEY")
+openai_model = os.getenv("OPENAI_MODEL", "gpt-4-turbo")
+openai_temp = float(os.getenv("OPENAI_TEMPERATURE", "0.3"))
+openai_max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", "400"))
 
-def _build_handler() -> RequestHandler:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        logger.warning("OPENAI_API_KEY not configured; using simulated LLM responses")
-        return RequestHandler()
+logger = logging.getLogger("intent_api")
 
-    try:
-        client = OpenAIClient(api_key=api_key)
-        return RequestHandler(client)
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.exception("Failed to initialize OpenAI client: %s", exc)
-        return RequestHandler()
-
-
-handler: RequestHandler = _build_handler()
+if openai_api_key:
+    client = OpenAIClient(
+        api_key=openai_api_key,
+        model_name=openai_model,
+        temperature=openai_temp,
+        max_tokens=openai_max_tokens
+    )
+    handler = RequestHandler(client)
+else:
+    handler = RequestHandler()
 
 
 @router.post("/classify", response_model=LLMIntentResponse, summary="LLM intent classification")
-async def classify_intent(request: LLMIntentRequest) -> LLMIntentResponse:
-    """Route rule-based output through the LLM classifier when configuration triggers it."""
+async def classify_intent(request: LLMIntentSimpleRequest) -> LLMIntentResponse:
+    """Route rule-based output through the LLM classifier when needed."""
 
-    try:
-        result = handler.handle(request)
-    except CircuitBreakerOpenError as exc:
-        logger.error("OpenAI circuit breaker open: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"message": "LLM temporarily unavailable", "reason": str(exc)},
-        ) from exc
-    except HTTPException:
-        raise
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.exception("Unexpected LLM handler failure: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"message": "LLM classification failed", "error": str(exc)},
-        ) from exc
+    # Build the full request with sensible defaults so the handler logic works
+    full = LLMIntentRequest(
+        user_input=request.user_input,
+        rule_intent=None,
+        action_code=None,
+        top_confidence=0.0,
+        next_best_confidence=0.0,
+        is_fallback=False,
+        context_snippets=[],
+        metadata={},
+    )
 
-    if not result["triggered"]:
+    result = handler.handle(full)
+
+    if not result.get("triggered", False):
         raise HTTPException(
             status_code=status.HTTP_202_ACCEPTED,
             detail={
