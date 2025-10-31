@@ -26,15 +26,17 @@ class TestHybridDecision(unittest.TestCase):
         engine = DecisionEngine()
         engine.kw_weight = 0.7
         engine.emb_weight = 0.3
+        # Update classifier weights
+        engine.hybrid_classifier.update_weights(0.7, 0.3)
         # same intent in both lists with different scores
         kw = [{"id": "PRODUCT_INFO", "intent": "PRODUCT_INFO", "score": 0.6, "source": "keyword"}]
         emb = [{"id": "PRODUCT_INFO", "intent": "PRODUCT_INFO", "score": 0.9, "source": "embedding"}]
-        blended = engine._blend_results(kw, emb)
+        blended = engine.hybrid_classifier.blend(kw, emb)
         self.assertTrue(blended)
         top = blended[0]
         expected = 0.6*engine.kw_weight + 0.9*engine.emb_weight
         self.assertAlmostEqual(top.get("score"), expected, places=4)
-        self.assertEqual(top.get("intent"), "PRODUCT_INFO")
+        self.assertEqual(top.get("id"), "PRODUCT_INFO")
 
 if __name__ == "__main__":
     unittest.main()

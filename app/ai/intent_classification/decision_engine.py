@@ -11,6 +11,7 @@ from app.core.config_manager import CONFIG_CACHE, ACTIVE_VARIANT, switch_variant
 from app.ai.config import PRIORITY_THRESHOLD, WEIGHTS  # Fallback config
 from app.ai.intent_classification.keyword_matcher import KeywordMatcher
 from app.ai.intent_classification.embedding_matcher import EmbeddingMatcher
+from app.ai.intent_classification.hybrid_classifier import HybridClassifier
 from app.ai.intent_classification import confidence_threshold
 # Optional LLM fallback
 try:
@@ -35,6 +36,8 @@ class DecisionEngine:
         self.keyword_matcher = KeywordMatcher()
         # Lazy-load embedding matcher to avoid loading model when disabled or in tests
         self.embedding_matcher = None
+        # Initialize hybrid classifier (weights will be updated from config)
+        self.hybrid_classifier = HybridClassifier()
         
         # Load settings from config manager (with fallback to static config)
         self._load_config_from_manager()
@@ -62,6 +65,8 @@ class DecisionEngine:
                 self.kw_weight = current_rules.get('kw_weight', WEIGHTS.get('keyword', 0.6))
                 self.emb_weight = current_rules.get('emb_weight', WEIGHTS.get('embedding', 0.4))
                 self.priority_threshold = current_rules.get('priority_threshold', PRIORITY_THRESHOLD)
+                # Update classifier weights
+                self.hybrid_classifier.update_weights(self.kw_weight, self.emb_weight)
                 print(
                     f"📋 Using config manager rules for variant {ACTIVE_VARIANT}: "
                     f"embedding={self.use_embedding}, keywords={self.use_keywords}, "
@@ -75,6 +80,8 @@ class DecisionEngine:
                 self.priority_threshold = 0.85
                 self.kw_weight = 0.6
                 self.emb_weight = 0.4
+                # Update classifier weights
+                self.hybrid_classifier.update_weights(self.kw_weight, self.emb_weight)
                 print("📋 Using fallback static config (Variant A: kw=0.6, emb=0.4, threshold=0.85)")
                 
         except Exception as e:
@@ -85,6 +92,8 @@ class DecisionEngine:
             self.priority_threshold = 0.85
             self.kw_weight = 0.6
             self.emb_weight = 0.4
+            # Update classifier weights
+            self.hybrid_classifier.update_weights(self.kw_weight, self.emb_weight)
 
     def search(self, query: str) -> Dict[str, Any]:
         """
@@ -118,7 +127,7 @@ class DecisionEngine:
         
         # Blend results if both methods are enabled
         if self.use_keywords and self.use_embedding:
-            blended_results = self._blend_results(keyword_results, embedding_results)
+            blended_results = self.hybrid_classifier.blend(keyword_results, embedding_results)
         elif self.use_keywords and keyword_results:
             blended_results = keyword_results
         elif self.use_embedding and embedding_results:
@@ -235,76 +244,6 @@ class DecisionEngine:
                 "config_variant": ACTIVE_VARIANT
             }
 
-    def _blend_results(self, kw_results: List, emb_results: List) -> List[Dict]:
-        """
-        Implements sophisticated weighted scoring to combine results from both methods.
-        """
-        if not kw_results and not emb_results:
-            return []
-        
-        if not kw_results:
-            return emb_results
-        
-        if not emb_results:
-            return kw_results
-        
-        # Create a mapping of intent IDs to their scores from both methods
-        intent_scores = {}
-        
-        # Process keyword results
-        for result in kw_results:
-            intent_id = result.get('id', result.get('intent', 'unknown'))
-            score = result.get('score', 0.0)
-            intent_scores[intent_id] = {
-                'keyword_score': score,
-                'keyword_result': result,
-                'embedding_score': 0.0,
-                'embedding_result': None
-            }
-        
-        # Process embedding results
-        for result in emb_results:
-            intent_id = result.get('id', result.get('intent', 'unknown'))
-            score = result.get('score', 0.0)
-            
-            if intent_id in intent_scores:
-                intent_scores[intent_id]['embedding_score'] = score
-                intent_scores[intent_id]['embedding_result'] = result
-            else:
-                intent_scores[intent_id] = {
-                    'keyword_score': 0.0,
-                    'keyword_result': None,
-                    'embedding_score': score,
-                    'embedding_result': result
-                }
-        
-        # Calculate blended scores
-        blended_results = []
-        kw_weight = getattr(self, 'kw_weight', WEIGHTS["keyword"])
-        emb_weight = getattr(self, 'emb_weight', WEIGHTS["embedding"])
-        
-        for intent_id, scores in intent_scores.items():
-            # Weighted average of scores
-            blended_score = (scores['keyword_score'] * kw_weight + 
-                           scores['embedding_score'] * emb_weight)
-            
-            # Use the result with higher individual score as base
-            if scores['keyword_score'] > scores['embedding_score']:
-                base_result = scores['keyword_result']
-            else:
-                base_result = scores['embedding_result']
-            
-            if base_result:
-                blended_result = base_result.copy()
-                blended_result['score'] = blended_score
-                blended_result['source'] = 'blended'
-                blended_result['keyword_score'] = scores['keyword_score']
-                blended_result['embedding_score'] = scores['embedding_score']
-                blended_results.append(blended_result)
-        
-        # Sort by blended score
-        blended_results.sort(key=lambda x: x['score'], reverse=True)
-        return blended_results
 
 
 # Global instance for the main API
