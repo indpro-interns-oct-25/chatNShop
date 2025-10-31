@@ -8,6 +8,19 @@ services:
     volumes:
       - qdrant_storage:/qdrant/storage
     environment:
+      QDRANT__STORAGE__STORAGE_PATH: /qdrant/storage
+      QDRANT__SERVICE__GRPC_PORT: 6334
+      QDRANT__SERVICE__API_KEY: qdrant-secret-key
+
+  redis:
+    image: redis:7-alpine
+    container_name: chatns-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis_data:/data
+    command: redis-server --save 60 1 --loglevel warning --appendonly yes
       - QDRANT__SERVICE__HTTP_PORT=6333
       - QDRANT__SERVICE__GRPC_PORT=6334
       - QDRANT__SERVICE__API_KEY=mykey@123
