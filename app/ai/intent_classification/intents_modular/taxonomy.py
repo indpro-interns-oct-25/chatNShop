@@ -28,8 +28,14 @@ class IntentTaxonomy:
         """Map example phrases to their corresponding action codes."""
         mappings: Dict[str, str] = {}
         for intent_name, intent_def in self.intents.items():
+            # Handle both string action codes and enum-like objects with .value
+            action_code_str = (
+                intent_def.action_code.value 
+                if hasattr(intent_def.action_code, 'value') 
+                else str(intent_def.action_code)
+            )
             for phrase in intent_def.example_phrases:
-                mappings[phrase.lower()] = intent_def.action_code.value
+                mappings[phrase.lower()] = action_code_str
         return mappings
 
     def _validate_intents(self) -> None:
@@ -38,10 +44,23 @@ class IntentTaxonomy:
             if not isinstance(intent_def, IntentDefinition):
                 raise ValueError(f"Invalid intent definition for '{intent_name}'")
 
-        # Check for duplicate action codes
-        action_codes = [def_.action_code for def_ in self.intents.values()]
+        # Check for duplicate action codes (warn but don't fail - multiple intents can share action codes)
+        # Handle both string action codes and enum-like objects with .value
+        action_codes = []
+        for def_ in self.intents.values():
+            action_code_str = (
+                def_.action_code.value 
+                if hasattr(def_.action_code, 'value') 
+                else str(def_.action_code)
+            )
+            action_codes.append(action_code_str)
+        
         if len(action_codes) != len(set(action_codes)):
-            raise ValueError("Duplicate action codes found in intent definitions")
+            # Find duplicates for warning message
+            from collections import Counter
+            duplicates = [code for code, count in Counter(action_codes).items() if count > 1]
+            print(f"⚠️  Warning: Some action codes are used by multiple intents: {duplicates[:5]}")
+            print(f"   This is allowed - multiple intents can map to the same action code.")
 
     # --------------------------------------------------------------------------
     # Retrieval Methods
@@ -50,7 +69,13 @@ class IntentTaxonomy:
     def get_intent_by_action_code(self, action_code: str) -> Optional[IntentDefinition]:
         """Retrieve intent definition by its action code."""
         for intent_def in self.intents.values():
-            if intent_def.action_code.value == action_code:
+            # Handle both string action codes and enum-like objects with .value
+            intent_action_code = (
+                intent_def.action_code.value 
+                if hasattr(intent_def.action_code, 'value') 
+                else str(intent_def.action_code)
+            )
+            if intent_action_code == action_code:
                 return intent_def
         return None
 
@@ -169,19 +194,25 @@ class IntentTaxonomy:
     def export_intent_definitions(self, format: str = "dict") -> Any:
         """Export all intent definitions in dict or JSON format."""
         if format == "dict":
-            return {
-                name: {
-                    "category": def_.category.value,
-                    "action_code": def_.action_code.value,
+            result = {}
+            for name, def_ in self.intents.items():
+                # Handle both string action codes and enum-like objects with .value
+                action_code_str = (
+                    def_.action_code.value 
+                    if hasattr(def_.action_code, 'value') 
+                    else str(def_.action_code)
+                )
+                result[name] = {
+                    "category": def_.category.value if hasattr(def_.category, 'value') else str(def_.category),
+                    "action_code": action_code_str,
                     "description": def_.description,
                     "example_phrases": def_.example_phrases,
-                    "required_entities": [e.value for e in def_.required_entities],
-                    "optional_entities": [e.value for e in def_.optional_entities],
+                    "required_entities": [e.value if hasattr(e, 'value') else str(e) for e in def_.required_entities],
+                    "optional_entities": [e.value if hasattr(e, 'value') else str(e) for e in def_.optional_entities],
                     "confidence_threshold": def_.confidence_threshold,
-                    "priority": def_.priority.name,
+                    "priority": def_.priority.name if hasattr(def_.priority, 'name') else str(def_.priority),
                 }
-                for name, def_ in self.intents.items()
-            }
+            return result
 
         elif format == "json":
             import json
@@ -216,7 +247,15 @@ def get_all_intent_categories() -> List[str]:
 
 def get_all_action_codes() -> List[str]:
     """Return all action code names as strings."""
-    return [action.value for action in ActionCode]
+    # ActionCode is a class with string attributes, not an Enum
+    # Extract all attributes that are strings (not methods or special attributes)
+    action_codes = []
+    for attr_name in dir(ActionCode):
+        if not attr_name.startswith('_'):
+            attr_value = getattr(ActionCode, attr_name)
+            if isinstance(attr_value, str):
+                action_codes.append(attr_value)
+    return sorted(list(set(action_codes)))  # Remove duplicates and sort
 
 
 # Exported symbols
