@@ -69,7 +69,10 @@ git clone <your-repo-url>
 cd chatNShop
 
 # Create virtual environment
+# Linux/Mac:
 python3 -m venv venv
+# Windows:
+python -m venv venv
 
 # Activate virtual environment
 # Linux/Mac:
@@ -85,7 +88,7 @@ venv\Scripts\Activate.ps1
 ### 2. Install Dependencies
 ```bash
 # Upgrade pip first
-python3 -m pip install --upgrade pip
+python -m pip install --upgrade pip
 
 # Install core dependencies
 pip install fastapi uvicorn[standard] pydantic python-dotenv
@@ -102,14 +105,14 @@ pip install -r requirements.txt
 ### 3. Test the System
 ```bash
 # Quick test (6 test queries)
-python3 -c "
+python -c "
 from app.ai.intent_classification.decision_engine import get_intent_classification
 result = get_intent_classification('add to cart')
 print('✅ System working:', result)
 "
 
 # Interactive test
-python3 -c "
+python -c "
 from app.ai.intent_classification.decision_engine import get_intent_classification
 import time
 
