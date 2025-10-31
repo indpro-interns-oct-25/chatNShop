@@ -36,6 +36,7 @@ load_dotenv()
 
 # --- Qdrant Configuration ---
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")  # NEW: support for Qdrant authentication
 PRODUCT_COLLECTION_NAME = "chatnshop_products"
 VECTOR_SIZE = 384  # Must match embedding model (all-MiniLM-L6-v2)
 # --- End Qdrant Configuration ---
@@ -52,15 +53,27 @@ for i in range(retries):
         client.get_collections()  # Test call
         qdrant_client = client
         print(f"Successfully connected to Qdrant on attempt {i+1}.")
+        if QDRANT_API_KEY:  # Authenticated connection
+            qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+        else:  # Open access (legacy/no-auth)
+            qdrant_client = QdrantClient(url=QDRANT_URL)
+        # Try a basic health check to trigger connection (list_collections: harmless)
+        qdrant_client.get_collections()
+        print(f"✅ Connected to Qdrant at {QDRANT_URL}")
         break
     except Exception as e:
-        print(f"Attempt {i+1} failed: Could not connect to Qdrant. Is the Docker container running?")
+        print(f"Attempt {i + 1} failed: Could not connect to Qdrant. Is the Docker container running?")
         print(f"   Error detail: {e}")
+        # Print any body/response if available (for HTTP errors)
+        if hasattr(e, 'response') and getattr(e.response, 'content', None):
+            print(f"Raw response content:\n{e.response.content}")
         if i < retries - 1:
             print(f"   Retrying in {wait_time} seconds...")
             time.sleep(wait_time)
         else:
             print(f"FAILED to initialize Qdrant client after {retries} attempts.")
+            print("FAILED to initialize Qdrant client after 5 attempts.")
+
 # --- End Qdrant Client Initialization ---
 
 
