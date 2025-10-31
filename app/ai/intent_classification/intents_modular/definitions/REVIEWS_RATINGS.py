@@ -15,7 +15,10 @@ reviews_ratings_intent_definitions = {
             "I want to review",
             "Add my review",
             "Write review",
-            "Post a review"
+            "Post a review",
+            "Leave a review",
+            "Submit my review",
+            "Write feedback"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[EntityType.REVIEW_RATING],
@@ -35,7 +38,9 @@ reviews_ratings_intent_definitions = {
             "Change my review",
             "Edit my rating",
             "Update review",
-            "Modify review"
+            "Modify review",
+            "Revise my review",
+            "Correct my review"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[EntityType.REVIEW_RATING],
@@ -55,7 +60,9 @@ reviews_ratings_intent_definitions = {
             "Remove review",
             "Delete my review",
             "Remove my rating",
-            "Cancel my review"
+            "Cancel my review",
+            "Erase my review",
+            "Take down my review"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -75,7 +82,9 @@ reviews_ratings_intent_definitions = {
             "Flag review",
             "Report this rating",
             "Flag this comment",
-            "Report inappropriate"
+            "Report inappropriate",
+            "Mark review as abusive",
+            "Report spam review"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[EntityType.REASON],
@@ -95,7 +104,12 @@ reviews_ratings_intent_definitions = {
             "Customer reviews",
             "What do people say?",
             "Show me feedback",
-            "User reviews"
+            "User reviews",
+            "Show reviews for headphones",
+            "See product reviews",
+            "Show me reviews for the wireless headphones",
+            "Read customer reviews",
+            "Display product reviews"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -115,7 +129,9 @@ reviews_ratings_intent_definitions = {
             "What reviews recommend?",
             "Review-based suggestions",
             "Recommend from reviews",
-            "Review insights"
+            "Review insights",
+            "Suggestions from customer reviews",
+            "Top picks by reviews"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -135,7 +151,9 @@ reviews_ratings_intent_definitions = {
             "What's the rating?",
             "Show rating",
             "Overall review score",
-            "Average review"
+            "Average review",
+            "Mean review rating",
+            "Average stars"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],

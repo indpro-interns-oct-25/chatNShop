@@ -171,12 +171,15 @@
     ]
   },
   "APPLY_COUPON": {
-    "priority": 20,
+    "priority": 3,
     "keywords": [
-      "apply coupon", "use promo code", "enter discount code", "redeem coupon", "apply discount",
-      "apply promo", "add coupon", "use coupon", "redeem promo code", "discount code apply",
-      "apply voucher", "apply promo code", "use discount", "redeem discount", "enter coupon",
-      "apply promotional code", "apply offer code", "add promo code", "redeem offer", "apply code"
+      "apply coupon", "apply coupon code", "use coupon", "use coupon code", "enter coupon",
+      "enter coupon code", "redeem coupon", "redeem coupon code", "apply discount",
+      "use discount code", "enter discount code", "apply promo", "apply promo code", "use promo code",
+      "redeem promo code", "apply promotional code", "apply offer code", "add coupon",
+      "add promo code", "redeem offer", "apply code", "apply voucher", "use voucher code",
+      "enter voucher code", "apply coupon save20", "apply code save20", "use code save20",
+      "enter code save20", "coupon code"
     ]
   },
   "REMOVE_COUPON": {
