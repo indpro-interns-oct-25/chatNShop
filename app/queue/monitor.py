@@ -52,7 +52,17 @@ class QueueMonitor:
         Returns:
             metrics: Performance and health metrics
         """
-        queue_stats = queue_manager.get_queue_stats()
+        queue_stats = {}
+        if queue_manager:
+            queue_stats = queue_manager.get_queue_stats()
+        else:
+            queue_stats = {
+                "status": "unavailable",
+                "ambiguous_queue_size": 0,
+                "result_queue_size": 0,
+                "dead_letter_queue_size": 0
+            }
+        
         uptime = time.time() - self.start_time
         
         avg_processing_time = 0.0
@@ -64,7 +74,7 @@ class QueueMonitor:
         
         return {
             **queue_stats,
-            "uptime_seconds": uptime,
+            "uptime_seconds": round(uptime, 2),
             "messages_enqueued": self.metrics["messages_enqueued"],
             "messages_dequeued": self.metrics["messages_dequeued"],
             "messages_failed": self.metrics["messages_failed"],

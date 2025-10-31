@@ -15,16 +15,18 @@ services:
   redis:
     image: redis:7-alpine
     container_name: chatns-redis
-    restart: always
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
-      - ./redis_data:/data
+      - redis_data:/data
     command: redis-server --save 60 1 --loglevel warning --appendonly yes
-      - QDRANT__SERVICE__HTTP_PORT=6333
-      - QDRANT__SERVICE__GRPC_PORT=6334
-      - QDRANT__SERVICE__API_KEY=mykey@123
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
   intent-api:
     build: .
@@ -36,12 +38,19 @@ services:
       - PORT=8000
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
 
 volumes:
   qdrant_storage:
+  redis_data:
