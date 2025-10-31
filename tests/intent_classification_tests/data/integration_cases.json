@@ -1,0 +1,402 @@
+[
+  {
+    "q": "add this to my cart!",
+    "expected": "ADD_TO_CART"
+  },
+  {
+    "q": "apply coupon SAVE20.",
+    "expected": "APPLY_COUPON"
+  },
+  {
+    "q": "show my cart?",
+    "expected": "VIEW_CART"
+  },
+  {
+    "q": "proceed to checkout",
+    "expected": "CHECKOUT_INITIATE"
+  },
+  {
+    "q": "tell me about this product!",
+    "expected": "PRODUCT_INFO"
+  },
+  {
+    "q": "compare iphone and galaxy.",
+    "expected": "PRODUCT_COMPARISON"
+  },
+  {
+    "q": "notify me when back in stock?",
+    "expected": "SUBSCRIBE_PRODUCT"
+  },
+  {
+    "q": "where is my order ORD123",
+    "expected": "ORDER_STATUS"
+  },
+  {
+    "q": "i want to return this!",
+    "expected": "INITIATE_RETURN"
+  },
+  {
+    "q": "show reviews for headphones.",
+    "expected": "VIEW_REVIEWS"
+  },
+  {
+    "q": "add this to my cart!",
+    "expected": "ADD_TO_CART"
+  },
+  {
+    "q": "apply coupon SAVE20.",
+    "expected": "APPLY_COUPON"
+  },
+  {
+    "q": "show my cart?",
+    "expected": "VIEW_CART"
+  },
+  {
+    "q": "proceed to checkout",
+    "expected": "CHECKOUT_INITIATE"
+  },
+  {
+    "q": "tell me about this product!",
+    "expected": "PRODUCT_INFO"
+  },
+  {
+    "q": "compare iphone and galaxy.",
+    "expected": "PRODUCT_COMPARISON"
+  },
+  {
+    "q": "notify me when back in stock?",
+    "expected": "SUBSCRIBE_PRODUCT"
+  },
+  {
+    "q": "where is my order ORD123",
+    "expected": "ORDER_STATUS"
+  },
+  {
+    "q": "i want to return this!",
+    "expected": "INITIATE_RETURN"
+  },
+  {
+    "q": "show reviews for headphones.",
+    "expected": "VIEW_REVIEWS"
+  },
+  {
+    "q": "add this to my cart!",
+    "expected": "ADD_TO_CART"
+  },
+  {
+    "q": "apply coupon SAVE20.",
+    "expected": "APPLY_COUPON"
+  },
+  {
+    "q": "show my cart?",
+    "expected": "VIEW_CART"
+  },
+  {
+    "q": "proceed to checkout",
+    "expected": "CHECKOUT_INITIATE"
+  },
+  {
+    "q": "tell me about this product!",
+    "expected": "PRODUCT_INFO"
+  },
+  {
+    "q": "compare iphone and galaxy.",
+    "expected": "PRODUCT_COMPARISON"
+  },
+  {
+    "q": "notify me when back in stock?",
+    "expected": "SUBSCRIBE_PRODUCT"
+  },
+  {
+    "q": "where is my order ORD123",
+    "expected": "ORDER_STATUS"
+  },
+  {
+    "q": "i want to return this!",
+    "expected": "INITIATE_RETURN"
+  },
+  {
+    "q": "show reviews for headphones.",
+    "expected": "VIEW_REVIEWS"
+  },
+  {
+    "q": "add this to my cart!",
+    "expected": "ADD_TO_CART"
+  },
+  {
+    "q": "apply coupon SAVE20.",
+    "expected": "APPLY_COUPON"
+  },
+  {
+    "q": "show my cart?",
+    "expected": "VIEW_CART"
+  },
+  {
+    "q": "proceed to checkout",
+    "expected": "CHECKOUT_INITIATE"
+  },
+  {
+    "q": "tell me about this product!",
+    "expected": "PRODUCT_INFO"
+  },
+  {
+    "q": "compare iphone and galaxy.",
+    "expected": "PRODUCT_COMPARISON"
+  },
+  {
+    "q": "notify me when back in stock?",
+    "expected": "SUBSCRIBE_PRODUCT"
+  },
+  {
+    "q": "where is my order ORD123",
+    "expected": "ORDER_STATUS"
+  },
+  {
+    "q": "i want to return this!",
+    "expected": "INITIATE_RETURN"
+  },
+  {
+    "q": "show reviews for headphones.",
+    "expected": "VIEW_REVIEWS"
+  },
+  {
+    "q": "add this to my cart!",
+    "expected": "ADD_TO_CART"
+  },
+  {
+    "q": "apply coupon SAVE20.",
+    "expected": "APPLY_COUPON"
+  },
+  {
+    "q": "show my cart?",
+    "expected": "VIEW_CART"
+  },
+  {
+    "q": "proceed to checkout",
+    "expected": "CHECKOUT_INITIATE"
+  },
+  {
+    "q": "tell me about this product!",
+    "expected": "PRODUCT_INFO"
+  },
+  {
+    "q": "compare iphone and galaxy.",
+    "expected": "PRODUCT_COMPARISON"
+  },
+  {
+    "q": "notify me when back in stock?",
+    "expected": "SUBSCRIBE_PRODUCT"
+  },
+  {
+    "q": "where is my order ORD123",
+    "expected": "ORDER_STATUS"
+  },
+  {
+    "q": "i want to return this!",
+    "expected": "INITIATE_RETURN"
+  },
+  {
+    "q": "show reviews for headphones.",
+    "expected": "VIEW_REVIEWS"
+  },
+  {
+    "q": "add this to my cart!",
+    "expected": "ADD_TO_CART"
+  },
+  {
+    "q": "apply coupon SAVE20.",
+    "expected": "APPLY_COUPON"
+  },
+  {
+    "q": "show my cart?",
+    "expected": "VIEW_CART"
+  },
+  {
+    "q": "proceed to checkout",
+    "expected": "CHECKOUT_INITIATE"
+  },
+  {
+    "q": "tell me about this product!",
+    "expected": "PRODUCT_INFO"
+  },
+  {
+    "q": "compare iphone and galaxy.",
+    "expected": "PRODUCT_COMPARISON"
+  },
+  {
+    "q": "notify me when back in stock?",
+    "expected": "SUBSCRIBE_PRODUCT"
+  },
+  {
+    "q": "where is my order ORD123",
+    "expected": "ORDER_STATUS"
+  },
+  {
+    "q": "i want to return this!",
+    "expected": "INITIATE_RETURN"
+  },
+  {
+    "q": "show reviews for headphones.",
+    "expected": "VIEW_REVIEWS"
+  },
+  {
+    "q": "add this to my cart!",
+    "expected": "ADD_TO_CART"
+  },
+  {
+    "q": "apply coupon SAVE20.",
+    "expected": "APPLY_COUPON"
+  },
+  {
+    "q": "show my cart?",
+    "expected": "VIEW_CART"
+  },
+  {
+    "q": "proceed to checkout",
+    "expected": "CHECKOUT_INITIATE"
+  },
+  {
+    "q": "tell me about this product!",
+    "expected": "PRODUCT_INFO"
+  },
+  {
+    "q": "compare iphone and galaxy.",
+    "expected": "PRODUCT_COMPARISON"
+  },
+  {
+    "q": "notify me when back in stock?",
+    "expected": "SUBSCRIBE_PRODUCT"
+  },
+  {
+    "q": "where is my order ORD123",
+    "expected": "ORDER_STATUS"
+  },
+  {
+    "q": "i want to return this!",
+    "expected": "INITIATE_RETURN"
+  },
+  {
+    "q": "show reviews for headphones.",
+    "expected": "VIEW_REVIEWS"
+  },
+  {
+    "q": "add this to my cart!",
+    "expected": "ADD_TO_CART"
+  },
+  {
+    "q": "apply coupon SAVE20.",
+    "expected": "APPLY_COUPON"
+  },
+  {
+    "q": "show my cart?",
+    "expected": "VIEW_CART"
+  },
+  {
+    "q": "proceed to checkout",
+    "expected": "CHECKOUT_INITIATE"
+  },
+  {
+    "q": "tell me about this product!",
+    "expected": "PRODUCT_INFO"
+  },
+  {
+    "q": "compare iphone and galaxy.",
+    "expected": "PRODUCT_COMPARISON"
+  },
+  {
+    "q": "notify me when back in stock?",
+    "expected": "SUBSCRIBE_PRODUCT"
+  },
+  {
+    "q": "where is my order ORD123",
+    "expected": "ORDER_STATUS"
+  },
+  {
+    "q": "i want to return this!",
+    "expected": "INITIATE_RETURN"
+  },
+  {
+    "q": "show reviews for headphones.",
+    "expected": "VIEW_REVIEWS"
+  },
+  {
+    "q": "add this to my cart!",
+    "expected": "ADD_TO_CART"
+  },
+  {
+    "q": "apply coupon SAVE20.",
+    "expected": "APPLY_COUPON"
+  },
+  {
+    "q": "show my cart?",
+    "expected": "VIEW_CART"
+  },
+  {
+    "q": "proceed to checkout",
+    "expected": "CHECKOUT_INITIATE"
+  },
+  {
+    "q": "tell me about this product!",
+    "expected": "PRODUCT_INFO"
+  },
+  {
+    "q": "compare iphone and galaxy.",
+    "expected": "PRODUCT_COMPARISON"
+  },
+  {
+    "q": "notify me when back in stock?",
+    "expected": "SUBSCRIBE_PRODUCT"
+  },
+  {
+    "q": "where is my order ORD123",
+    "expected": "ORDER_STATUS"
+  },
+  {
+    "q": "i want to return this!",
+    "expected": "INITIATE_RETURN"
+  },
+  {
+    "q": "show reviews for headphones.",
+    "expected": "VIEW_REVIEWS"
+  },
+  {
+    "q": "add this to my cart!",
+    "expected": "ADD_TO_CART"
+  },
+  {
+    "q": "apply coupon SAVE20.",
+    "expected": "APPLY_COUPON"
+  },
+  {
+    "q": "show my cart?",
+    "expected": "VIEW_CART"
+  },
+  {
+    "q": "proceed to checkout",
+    "expected": "CHECKOUT_INITIATE"
+  },
+  {
+    "q": "tell me about this product!",
+    "expected": "PRODUCT_INFO"
+  },
+  {
+    "q": "compare iphone and galaxy.",
+    "expected": "PRODUCT_COMPARISON"
+  },
+  {
+    "q": "notify me when back in stock?",
+    "expected": "SUBSCRIBE_PRODUCT"
+  },
+  {
+    "q": "where is my order ORD123",
+    "expected": "ORDER_STATUS"
+  },
+  {
+    "q": "i want to return this!",
+    "expected": "INITIATE_RETURN"
+  },
+  {
+    "q": "show reviews for headphones.",
+    "expected": "VIEW_REVIEWS"
+  }
+]
