@@ -212,3 +212,11 @@ __marimo__/
 
 # CNS-12: Ambiguity resolver log files
 ambiguous_log.json
+# Configuration version backups - auto-generated
+config/versions/
+# Keep the directory but ignore the files
+config/versions/*.json
+
+
+logs/
+logs/*.jsonl

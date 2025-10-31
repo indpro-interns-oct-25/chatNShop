@@ -140,7 +140,9 @@ notifications_subscriptions_intent_definitions = {
             "Subscribe to product notifications",
             "Alert me when available",
             "Notify me about this item",
-            "Subscribe to updates"
+            "Subscribe to updates",
+            "Notify me when back in stock",
+            "Stock alert for this product"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[EntityType.NOTIFICATION_PREFERENCES],

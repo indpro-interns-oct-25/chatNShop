@@ -4,6 +4,43 @@ A **100% Production-Ready** hybrid intent classification system for e-commerce, 
 
 ## 🚀 Quick Start
 
+### **Development Setup (Docker)**
+
+**Start (Qdrant + API):**
+```bash
+docker-compose up --build -d
+```
+
+**Stop:**
+```bash
+docker-compose down
+```
+
+**Access:**
+- API: http://localhost:8000
+- Docs: http://localhost:8000/docs
+- Health: http://localhost:8000/health
+- Qdrant: http://localhost:6333
+
+### **Production Setup (Docker Compose)**
+
+```bash
+docker-compose up --build -d
+```
+
+**Services:**
+- ✅ **Qdrant Vector Database** (port 6333)
+- ✅ **Intent Classification API** (port 8000)
+- ✅ **Health Checks** (automatic)
+- ✅ **Auto-restart** (production-ready)
+- ✅ **Volume Persistence** (data survives restarts)
+
+**Access Points:**
+- **API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health
+- **Qdrant**: http://localhost:6333
+
 ### Service Architecture
 The system uses a **hybrid architecture** combining multiple approaches for optimal performance:
 
@@ -98,20 +135,15 @@ for query in test_queries:
 "
 ```
 
-### 4. Run the Web Application
+### 4. Run the Web Application (Docker)
 ```bash
-# Make sure virtual environment is activated
-source venv/bin/activate  # Linux/Mac
-# or: source venv/Scripts/activate  # Windows
-
-# Start the FastAPI server
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+docker-compose up --build -d
 ```
 
-**Web Interface Available At:**
-- 🌐 **Main App**: http://localhost:8000
-- 📚 **API Docs**: http://localhost:8000/docs
-- ❤️ **Health Check**: http://localhost:8000/health
+**Web Interface:**
+- 🌐 Main App: http://localhost:8000
+- 📚 API Docs: http://localhost:8000/docs
+- ❤️ Health Check: http://localhost:8000/health
 
 ## 📁 Project Structure
 
@@ -369,13 +401,25 @@ MIN_DIFFERENCE_THRESHOLD = 0.05  # Minimum gap between top results
 
 ### Production Deployment
 
-**Docker Deployment:**
+**One-Command Setup:**
 ```bash
-# Build Docker image
-docker build -t chatnshop-intent .
+# Start everything (Qdrant + API)
+./start.sh
 
-# Run container
-docker run -p 8000:8000 chatnshop-intent
+# Stop everything
+./stop.sh
+```
+
+**Manual Docker Compose:**
+```bash
+# Start services
+docker-compose up --build -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
 ```
 
 **Environment Variables:**
@@ -612,16 +656,14 @@ export LOG_LEVEL=warning
 uvicorn app.main:app --workers 4 --host 0.0.0.0 --port 8000
 ```
 
-### Docker Services
+### Docker Service Management
 ```bash
-# Start all services (Qdrant, Redis, PostgreSQL)
-docker-compose up -d
+# Start all services
+docker-compose up --build -d
 
-# Start only Qdrant
-docker-compose up -d qdrant
-
-# View service logs
-docker-compose logs -f
+# View logs
+docker-compose logs -f intent-api
+docker-compose logs -f qdrant
 
 # Stop all services
 docker-compose down

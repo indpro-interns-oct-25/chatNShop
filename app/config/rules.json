@@ -1,6 +1,0 @@
-{
-  "rule_sets": {
-    "A": {"use_embedding": true, "use_keywords": false},
-    "B": {"use_embedding": false, "use_keywords": true}
-  }
-}
