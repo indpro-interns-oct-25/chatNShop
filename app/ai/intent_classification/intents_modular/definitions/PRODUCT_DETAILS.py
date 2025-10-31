@@ -15,7 +15,10 @@ product_details_intent_definitions = {
             "What does this do?",
             "Tell me more",
             "Product specs",
-            "What's this product about?"
+            "What's this product about?",
+            "Give me product info",
+            "Explain this product",
+            "Show product information"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -35,7 +38,10 @@ product_details_intent_definitions = {
             "Detailed information",
             "Complete product info",
             "Show me everything",
-            "Full product details"
+            "Full product details",
+            "Display product details",
+            "Show item details",
+            "Detailed specs"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -55,7 +61,9 @@ product_details_intent_definitions = {
             "Is this product available?",
             "Stock status",
             "Is it available now?",
-            "Check if in stock"
+            "Check if in stock",
+            "Availability status",
+            "Available to order?"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -75,7 +83,10 @@ product_details_intent_definitions = {
             "Price information",
             "What's the cost?",
             "Show price",
-            "How much?"
+            "How much?",
+            "Product price",
+            "What's the price of this?",
+            "Tell me the cost"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -95,7 +106,9 @@ product_details_intent_definitions = {
             "Display images",
             "I want to see images",
             "Show pictures",
-            "Product gallery"
+            "Product gallery",
+            "Show product images",
+            "Show item photos"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -115,7 +128,9 @@ product_details_intent_definitions = {
             "Display videos",
             "I want to watch video",
             "Show me the video",
-            "Product demo video"
+            "Product demo video",
+            "Play product video",
+            "Show demo video"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -155,7 +170,9 @@ product_details_intent_definitions = {
             "What size is this?",
             "Show dimensions",
             "How large is it?",
-            "Size information"
+            "Size information",
+            "Product size details",
+            "Dimensions of this item"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -175,7 +192,9 @@ product_details_intent_definitions = {
             "How heavy is it?",
             "Product weight",
             "Tell me the weight",
-            "Weight details"
+            "Weight details",
+            "Item weight",
+            "Weight of this product"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -195,7 +214,9 @@ product_details_intent_definitions = {
             "Color choices",
             "Show color variants",
             "What color options?",
-            "Available colorways"
+            "Available colorways",
+            "List color options",
+            "Show available colours"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -215,7 +236,9 @@ product_details_intent_definitions = {
             "Size choices",
             "Show size variants",
             "What size options?",
-            "Available sizes"
+            "Available sizes",
+            "List size options",
+            "Show available sizes"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -235,7 +258,9 @@ product_details_intent_definitions = {
             "Show me options",
             "What options are there?",
             "Product variations",
-            "Show all options"
+            "Show all options",
+            "List product variants",
+            "Available product versions"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -255,7 +280,9 @@ product_details_intent_definitions = {
             "Product code",
             "Item number",
             "Show SKU",
-            "What's the model number?"
+            "What's the model number?",
+            "Show product SKU",
+            "Display SKU"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -275,7 +302,9 @@ product_details_intent_definitions = {
             "Show me questions",
             "FAQ about this product",
             "What questions are asked?",
-            "Show product FAQ"
+            "Show product FAQ",
+            "FAQ for this item",
+            "Product help questions"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -295,7 +324,10 @@ product_details_intent_definitions = {
             "Customer reviews",
             "What do people say?",
             "Show me feedback",
-            "User reviews"
+            "User reviews",
+            "Read product reviews",
+            "Show customer feedback",
+            "What are customers saying?"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -315,7 +347,9 @@ product_details_intent_definitions = {
             "What's the rating?",
             "Show rating",
             "Overall review score",
-            "Average review"
+            "Average review",
+            "Mean star rating",
+            "Typical rating for this"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -335,7 +369,9 @@ product_details_intent_definitions = {
             "Show rating",
             "Product rating",
             "How many stars?",
-            "What's the score?"
+            "What's the score?",
+            "Star rating for this",
+            "Rating out of five"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -357,7 +393,9 @@ product_details_intent_definitions = {
             "Show comparison",
             "Compare side by side",
             "Compare iPhone and Galaxy",
-            "Compare iPhone 14 and Galaxy S23"
+            "Compare iPhone 14 and Galaxy S23",
+            "Which is better between these two?",
+            "Put these two products head to head"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -377,7 +415,9 @@ product_details_intent_definitions = {
             "Compare specs",
             "Show me feature differences",
             "Compare capabilities",
-            "Feature differences"
+            "Feature differences",
+            "Side-by-side spec comparison",
+            "Which features differ?"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -397,7 +437,9 @@ product_details_intent_definitions = {
             "Other options",
             "Similar products",
             "Alternative choices",
-            "Show me other options"
+            "Show me other options",
+            "What else is similar?",
+            "Recommend alternatives"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -417,7 +459,9 @@ product_details_intent_definitions = {
             "What goes with this?",
             "Accessories for this",
             "Show me add-ons",
-            "Related items"
+            "Related items",
+            "Compatible accessories",
+            "Add-on recommendations"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -437,7 +481,9 @@ product_details_intent_definitions = {
             "Share product",
             "Show me how to share",
             "Share link",
-            "Send product link"
+            "Send product link",
+            "Copy share link",
+            "Share via email"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -457,7 +503,9 @@ product_details_intent_definitions = {
             "I need a quote",
             "Can I get a quote?",
             "Request pricing",
-            "Show me quote options"
+            "Show me quote options",
+            "Provide a price quote",
+            "Send me a quotation"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[EntityType.QUANTITY, EntityType.EMAIL],

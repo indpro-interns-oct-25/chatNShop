@@ -17,7 +17,9 @@ orders_fulfillment_intent_definitions = {
             "Status of my order",
             "How is my order?",
             "Order progress",
-            "Check my order"
+            "Check my order",
+            "Update on my order",
+            "What's happening with my order?"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],
@@ -37,7 +39,9 @@ orders_fulfillment_intent_definitions = {
             "Show order history",
             "All my orders",
             "Order list",
-            "Past purchases"
+            "Past purchases",
+            "View my previous orders",
+            "See my purchase history"
         ],
         required_entities=[],
         optional_entities=[EntityType.DATE_RANGE],
@@ -57,7 +61,9 @@ orders_fulfillment_intent_definitions = {
             "I need to cancel",
             "Cancel purchase",
             "Cancel my purchase",
-            "Stop this order"
+            "Stop this order",
+            "Abort this order",
+            "Please cancel this order"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[EntityType.REASON],
@@ -77,7 +83,9 @@ orders_fulfillment_intent_definitions = {
             "Return order",
             "Return purchase",
             "Return this product",
-            "I want to return"
+            "I want to return",
+            "Create a return",
+            "Start a return request"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[EntityType.REASON],
@@ -97,7 +105,9 @@ orders_fulfillment_intent_definitions = {
             "Track delivery",
             "Where's my delivery?",
             "Track my order",
-            "Package status"
+            "Package status",
+            "Follow my shipment",
+            "Shipment tracking status"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],
@@ -117,7 +127,9 @@ orders_fulfillment_intent_definitions = {
             "Return status",
             "Where's my return?",
             "Track return shipment",
-            "Return package tracking"
+            "Return package tracking",
+            "Follow my return",
+            "Return shipment status"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],
@@ -137,7 +149,9 @@ orders_fulfillment_intent_definitions = {
             "Cancel return request",
             "Don't return anymore",
             "Cancel return process",
-            "Stop return"
+            "Stop return",
+            "Withdraw return request",
+            "Abort the return"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],
@@ -157,7 +171,9 @@ orders_fulfillment_intent_definitions = {
             "Refund request",
             "Give me refund",
             "Process refund",
-            "Refund this order"
+            "Refund this order",
+            "Start a refund",
+            "Initiate a refund request"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[EntityType.REASON],
@@ -177,7 +193,9 @@ orders_fulfillment_intent_definitions = {
             "Refund complete?",
             "Refund finished?",
             "Refund processed",
-            "Check refund"
+            "Check refund",
+            "Has my refund been issued?",
+            "Refund completion status"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],
@@ -197,7 +215,9 @@ orders_fulfillment_intent_definitions = {
             "Print invoice",
             "Email invoice",
             "Get invoice",
-            "Invoice for order"
+            "Invoice for order",
+            "Download my invoice",
+            "Send me the invoice"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],
@@ -217,7 +237,9 @@ orders_fulfillment_intent_definitions = {
             "Reorder item",
             "Purchase again",
             "Order same thing",
-            "Buy this again"
+            "Buy this again",
+            "Repeat my last order",
+            "Order this once more"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[EntityType.QUANTITY],
@@ -237,7 +259,9 @@ orders_fulfillment_intent_definitions = {
             "Delivery progress",
             "Is it delivered yet?",
             "Delivery information",
-            "Check delivery"
+            "Check delivery",
+            "What's the delivery status?",
+            "Has my package been delivered?"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],
@@ -257,7 +281,9 @@ orders_fulfillment_intent_definitions = {
             "Delivery date",
             "Arrival time",
             "When delivered?",
-            "Delivery timeline"
+            "Delivery timeline",
+            "Estimated arrival time",
+            "Expected delivery date"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],
@@ -277,7 +303,9 @@ orders_fulfillment_intent_definitions = {
             "Choose delivery time",
             "Pick delivery date",
             "Schedule delivery time",
-            "Set delivery appointment"
+            "Set delivery appointment",
+            "Book a delivery slot",
+            "Arrange delivery time"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[EntityType.DATE_RANGE],
@@ -297,7 +325,9 @@ orders_fulfillment_intent_definitions = {
             "Modify delivery date",
             "Update delivery",
             "Change delivery schedule",
-            "Reschedule my delivery"
+            "Reschedule my delivery",
+            "Move my delivery date",
+            "Adjust delivery time"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[EntityType.DATE_RANGE],
@@ -317,7 +347,9 @@ orders_fulfillment_intent_definitions = {
             "Package details",
             "Shipping details",
             "Shipment specifics",
-            "Delivery details"
+            "Delivery details",
+            "Tracking details for shipment",
+            "Full shipping information"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],
@@ -337,7 +369,9 @@ orders_fulfillment_intent_definitions = {
             "Shipping fee",
             "How much for shipping?",
             "Shipping price",
-            "Delivery fee"
+            "Delivery fee",
+            "Cost of shipping this order",
+            "How much will delivery cost?"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],
@@ -357,7 +391,9 @@ orders_fulfillment_intent_definitions = {
             "Available shipping",
             "Shipping methods",
             "What delivery options?",
-            "Show delivery choices"
+            "Show delivery choices",
+            "Available carriers and speeds",
+            "List shipping methods"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],
@@ -377,7 +413,9 @@ orders_fulfillment_intent_definitions = {
             "Change order details",
             "Modify purchase",
             "Update my order",
-            "Change order"
+            "Change order",
+            "Edit my order",
+            "Adjust order details"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],

@@ -48,8 +48,9 @@ class DecisionEngine:
             # Import here to get fresh values
             from app.core.config_manager import CONFIG_CACHE, ACTIVE_VARIANT
             
-            # Try to get rules from config manager
-            rules = CONFIG_CACHE.get('rules', {})
+            # Try to get rules from config manager (supports nested schema: {"rules": {"rule_sets": {...}}})
+            rules_root = CONFIG_CACHE.get('rules', {})
+            rules = rules_root.get('rules', rules_root)
             rule_sets = rules.get('rule_sets', {})
             current_rules = rule_sets.get(ACTIVE_VARIANT, {})
             
@@ -57,24 +58,33 @@ class DecisionEngine:
             if current_rules:
                 self.use_embedding = current_rules.get('use_embedding', True)
                 self.use_keywords = current_rules.get('use_keywords', True)
-                print(f"📋 Using config manager rules for variant {ACTIVE_VARIANT}: embedding={self.use_embedding}, keywords={self.use_keywords}")
+                # Load dynamic weights/thresholds if present
+                self.kw_weight = current_rules.get('kw_weight', WEIGHTS.get('keyword', 0.6))
+                self.emb_weight = current_rules.get('emb_weight', WEIGHTS.get('embedding', 0.4))
+                self.priority_threshold = current_rules.get('priority_threshold', PRIORITY_THRESHOLD)
+                print(
+                    f"📋 Using config manager rules for variant {ACTIVE_VARIANT}: "
+                    f"embedding={self.use_embedding}, keywords={self.use_keywords}, "
+                    f"kw_weight={self.kw_weight}, emb_weight={self.emb_weight}, "
+                    f"threshold={self.priority_threshold}"
+                )
             else:
-                # Fallback to static config (biased to embeddings for production)
+                # Fallback to static config (Variant A defaults)
                 self.use_embedding = True
                 self.use_keywords = True
-                self.priority_threshold = 0.90
-                self.kw_weight = 0.4
-                self.emb_weight = 0.6
-                print("📋 Using fallback static config (Variant B: kw=0.4, emb=0.6, threshold=0.90)")
+                self.priority_threshold = 0.85
+                self.kw_weight = 0.6
+                self.emb_weight = 0.4
+                print("📋 Using fallback static config (Variant A: kw=0.6, emb=0.4, threshold=0.85)")
                 
         except Exception as e:
-            # Fallback to static config on any error (Variant B)
+            # Fallback to static config on any error (Variant A)
             print(f"⚠️ Config manager error, using fallback: {e}")
             self.use_embedding = True
             self.use_keywords = True
-            self.priority_threshold = 0.90
-            self.kw_weight = 0.4
-            self.emb_weight = 0.6
+            self.priority_threshold = 0.85
+            self.kw_weight = 0.6
+            self.emb_weight = 0.4
 
     def search(self, query: str) -> Dict[str, Any]:
         """
