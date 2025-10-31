@@ -4,56 +4,31 @@ A **100% Production-Ready** hybrid intent classification system for e-commerce, 
 
 ## 🚀 Quick Start
 
-### **Development Setup**
+### **Development Setup (Docker)**
 
-**One-Command Development:**
+**Start (Qdrant + API):**
 ```bash
-# Start development environment (Qdrant + API with hot-reload)
-./dev.sh
+docker-compose up --build -d
 ```
 
-**Manual Development Setup:**
+**Stop:**
 ```bash
-# Start Qdrant only (for development)
-docker-compose up qdrant -d
-
-# Start API in development mode
-source venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-**Development Features:**
-- ✅ **Hot Reload** - Code changes auto-restart server
-- ✅ **Qdrant Available** - Vector database for testing
-- ✅ **Fast Startup** - No Docker build needed
-- ✅ **Debug Mode** - Detailed error messages
-- ✅ **Live Testing** - Test changes immediately
-
-**Stop Development:**
-```bash
-# Stop API only (Ctrl+C in terminal)
-# Stop Qdrant (after Ctrl+C)
 docker-compose down
-
-# Or use cleanup script
-./dev-cleanup.sh
 ```
 
-**Important:** Ctrl+C only stops the API server. Qdrant keeps running in the background.
+**Access:**
+- API: http://localhost:8000
+- Docs: http://localhost:8000/docs
+- Health: http://localhost:8000/health
+- Qdrant: http://localhost:6333
 
-### **One-Command Production Setup**
-
-For production deployment, use Docker Compose:
+### **Production Setup (Docker Compose)**
 
 ```bash
-# Start everything (Qdrant + API)
-./start.sh
-
-# Stop everything
-./stop.sh
+docker-compose up --build -d
 ```
 
-**What gets started:**
+**Services:**
 - ✅ **Qdrant Vector Database** (port 6333)
 - ✅ **Intent Classification API** (port 8000)
 - ✅ **Health Checks** (automatic)
@@ -157,20 +132,15 @@ for query in test_queries:
 "
 ```
 
-### 4. Run the Web Application
+### 4. Run the Web Application (Docker)
 ```bash
-# Make sure virtual environment is activated
-source venv/bin/activate  # Linux/Mac
-# or: source venv/Scripts/activate  # Windows
-
-# Start the FastAPI server
-python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+docker-compose up --build -d
 ```
 
-**Web Interface Available At:**
-- 🌐 **Main App**: http://localhost:8000
-- 📚 **API Docs**: http://localhost:8000/docs
-- ❤️ **Health Check**: http://localhost:8000/health
+**Web Interface:**
+- 🌐 Main App: http://localhost:8000
+- 📚 API Docs: http://localhost:8000/docs
+- ❤️ Health Check: http://localhost:8000/health
 
 ## 📁 Project Structure
 
@@ -683,16 +653,14 @@ export LOG_LEVEL=warning
 uvicorn app.main:app --workers 4 --host 0.0.0.0 --port 8000
 ```
 
-### Docker Services
+### Docker Service Management
 ```bash
-# Start all services (Qdrant, Redis, PostgreSQL)
-docker-compose up -d
+# Start all services
+docker-compose up --build -d
 
-# Start only Qdrant
-docker-compose up -d qdrant
-
-# View service logs
-docker-compose logs -f
+# View logs
+docker-compose logs -f intent-api
+docker-compose logs -f qdrant
 
 # Stop all services
 docker-compose down

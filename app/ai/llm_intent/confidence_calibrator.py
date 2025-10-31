@@ -1,9 +1,40 @@
 """Confidence calibration rules governing when the LLM should activate."""
 
 from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Optional, Set
+import json
+from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Prompt versioning & schema validation
+# ---------------------------------------------------------------------------
+
+PROMPT_VERSION = "v1.0.0"
+"""Current prompt template and few-shot example version used in LLM classification."""
+
+def validate_prompt_schema(prompt_json: list[dict]) -> bool:
+    """
+    Basic runtime JSON schema validation for few-shot examples.
+    Ensures consistent fields for CI integration and downstream analytics.
+    """
+    required_keys = {"user", "assistant"}
+    required_assistant_keys = {
+        "action_code",
+        "confidence",
+        "reasoning",
+        "secondary_intents",
+        "entities_extracted",
+    }
+
+    for i, example in enumerate(prompt_json):
+        if not required_keys.issubset(example.keys()):
+            raise ValueError(f"[SchemaError] Example {i} missing required keys: {example}")
+        assistant = example["assistant"]
+        if not required_assistant_keys.issubset(assistant.keys()):
+            missing = required_assistant_keys - assistant.keys()
+            raise ValueError(f"[SchemaError] Example {i} missing assistant fields: {missing}")
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -41,8 +72,9 @@ class TriggerContext:
 def should_trigger_llm(ctx: TriggerContext) -> tuple[bool, str]:
     """Evaluate whether the LLM classifier must be activated.
 
-    Returns a tuple of ``(should_trigger, reason)`` where ``reason`` captures the
-    trigger that fired to support observability and downstream analytics.
+    Returns:
+        tuple[bool, str]: (should_trigger, reason)
+        where reason describes the trigger for observability and analytics.
     """
 
     if ctx.action_code in RULE_BASED_ESCALATION_CODES:
@@ -60,7 +92,27 @@ def should_trigger_llm(ctx: TriggerContext) -> tuple[bool, str]:
     return False, "sufficient_confidence"
 
 
+# ---------------------------------------------------------------------------
+# CLI entry point for schema + prompt validation
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    prompt_path = Path(__file__).parent / "prompts" / f"few_shot_examples_{PROMPT_VERSION}.json"
+    if not prompt_path.exists():
+        print(f"⚠️  Prompt file not found at: {prompt_path}")
+    else:
+        data = json.load(open(prompt_path, "r", encoding="utf-8"))
+        try:
+            validate_prompt_schema(data)
+            print(f"✅ Schema validation passed for {prompt_path.name} ({len(data)} examples)")
+            print(f"🧠 Prompt version: {PROMPT_VERSION}")
+        except ValueError as e:
+            print(f"❌ Schema validation failed: {e}")
+
+
 __all__ = [
+    "PROMPT_VERSION",
+    "validate_prompt_schema",
     "LOW_CONFIDENCE_THRESHOLD",
     "AMBIGUITY_DELTA",
     "RULE_BASED_ESCALATION_CODES",

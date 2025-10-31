@@ -1,7 +1,4 @@
-version: '3.8'
-
 services:
-  # Qdrant Vector Database
   qdrant:
     image: qdrant/qdrant:latest
     container_name: chatnshop-qdrant
@@ -13,30 +10,19 @@ services:
     environment:
       - QDRANT__SERVICE__HTTP_PORT=6333
       - QDRANT__SERVICE__GRPC_PORT=6334
+      - QDRANT__SERVICE__API_KEY=mykey@123
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # Intent Classification API
   intent-api:
     build: .
     container_name: chatnshop-intent-api
     ports:
       - "8000:8000"
-    volumes:
-      - ./config:/app/config
-      - ./app/ai/intent_classification/keywords:/app/app/ai/intent_classification/keywords
     environment:
       - HOST=0.0.0.0
       - PORT=8000
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
-    depends_on:
-      qdrant:
-        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
