@@ -15,7 +15,9 @@ returns_refunds_intent_definitions = {
             "Return information",
             "Return terms",
             "Return conditions",
-            "Return rules"
+            "Return rules",
+            "Explain your return policy",
+            "How can I return items?"
         ],
         required_entities=[],
         optional_entities=[],
@@ -35,7 +37,9 @@ returns_refunds_intent_definitions = {
             "Warranty terms",
             "Warranty coverage",
             "Warranty details",
-            "Warranty policy"
+            "Warranty policy",
+            "Explain the warranty",
+            "What's covered under warranty?"
         ],
         required_entities=[],
         optional_entities=[],
@@ -55,7 +59,9 @@ returns_refunds_intent_definitions = {
             "Is return allowed?",
             "Returnable product?",
             "Eligible for return?",
-            "Can I send this back?"
+            "Can I send this back?",
+            "Is this item eligible for returns?",
+            "Can I return this product?"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],
@@ -75,7 +81,9 @@ returns_refunds_intent_definitions = {
             "I need to return",
             "Begin return",
             "Start return",
-            "Return this product"
+            "Return this product",
+            "Create a return",
+            "Start a return request"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[EntityType.REASON, EntityType.RETURN_REASON],
@@ -95,7 +103,9 @@ returns_refunds_intent_definitions = {
             "Don't return anymore",
             "Cancel return",
             "Stop return",
-            "Cancel return process"
+            "Cancel return process",
+            "Withdraw return request",
+            "Abort the return"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],
@@ -115,7 +125,9 @@ returns_refunds_intent_definitions = {
             "Return status",
             "Where's my return?",
             "Track return shipment",
-            "Return package tracking"
+            "Return package tracking",
+            "Track my return order",
+            "Follow my return"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],
@@ -135,7 +147,9 @@ returns_refunds_intent_definitions = {
             "Pickup for return",
             "Schedule return collection",
             "Return pickup",
-            "Arrange pickup"
+            "Arrange pickup",
+            "Book a pickup for my return",
+            "Pickup request for return"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[EntityType.DATE_RANGE, EntityType.ADDRESS],
@@ -155,7 +169,9 @@ returns_refunds_intent_definitions = {
             "Return update",
             "Status of return",
             "Return information",
-            "Check return status"
+            "Check return status",
+            "Update on my return",
+            "What's the status of my return?"
         ],
         required_entities=[EntityType.ORDER_ID],
         optional_entities=[],
@@ -175,7 +191,9 @@ returns_refunds_intent_definitions = {
             "Warranty service",
             "Claim under warranty",
             "Warranty repair",
-            "Warranty replacement"
+            "Warranty replacement",
+            "Open a warranty ticket",
+            "Start warranty process"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[EntityType.ISSUE_TYPE, EntityType.REASON],
@@ -195,7 +213,9 @@ returns_refunds_intent_definitions = {
             "Is this under warranty?",
             "Warranty coverage status",
             "Warranty details",
-            "Check warranty coverage"
+            "Check warranty coverage",
+            "Is my product still under warranty?",
+            "Warranty validity status"
         ],
         required_entities=[EntityType.PRODUCT_ID],
         optional_entities=[],

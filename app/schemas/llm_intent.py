@@ -54,3 +54,9 @@ class LLMIntentResponse(BaseModel):
         default_factory=dict,
         description="Auxiliary metadata (trigger reason, processing stats, etc.).",
     )
+
+
+class LLMIntentSimpleRequest(BaseModel):
+    """Minimal request payload: only raw user input."""
+
+    user_input: str = Field(..., description="Raw user utterance requiring clarification.")

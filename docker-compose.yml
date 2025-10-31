@@ -1,9 +1,4 @@
-version: '3.8'
-
 services:
-  # ==============================
-  # Qdrant Vector Database
-  # ==============================
   qdrant:
     image: qdrant/qdrant:latest
     container_name: chatnshop-qdrant
@@ -13,42 +8,52 @@ services:
     volumes:
       - qdrant_storage:/qdrant/storage
     environment:
-      - QDRANT__SERVICE__HTTP_PORT=6333
-      - QDRANT__SERVICE__GRPC_PORT=6334
-    restart: unless-stopped
-    healthcheck:
-      # ✅ Fixed endpoint to /healthz (new version uses this)
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
-      interval: 20s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+=======
+      QDRANT__STORAGE__STORAGE_PATH: /qdrant/storage
+      QDRANT__SERVICE__GRPC_PORT: 6334
+      QDRANT__SERVICE__API_KEY: qdrant-secret-key
 
-  # ==============================
-  # Intent Classification API
-  # ==============================
+  redis:
+    image: redis:7-alpine
+    container_name: chatns-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --save 60 1 --loglevel warning --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
   intent-api:
     build: .
     container_name: chatnshop-intent-api
     ports:
       - "8000:8000"
-    volumes:
-      - ./config:/app/config
-      - ./app/ai/intent_classification/keywords:/app/app/ai/intent_classification/keywords
     environment:
       - HOST=0.0.0.0
       - PORT=8000
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
-    depends_on:
-      qdrant:
-        condition: service_healthy
+      - QDRANT_URL=http://qdrant:6333
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4-turbo}
+      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.3}
+      - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-400}
     restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
       interval: 20s
       timeout: 10s
-      retries: 10
       start_period: 40s
 
 # ==============================
