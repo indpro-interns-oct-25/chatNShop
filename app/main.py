@@ -59,6 +59,12 @@ VECTOR_SIZE = 384  # Must match embedding model
 # --- End Qdrant Configuration ---
 
 # --- Initialize Qdrant Client with Retry Logic ---
+QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+# Use QDRANT_URL if set, otherwise construct from host/port
+if not QDRANT_URL or QDRANT_URL == "http://localhost:6333":
+    QDRANT_URL = f"http://{QDRANT_HOST}:{QDRANT_PORT}"
+
 print(f"Attempting to connect to Qdrant at {QDRANT_URL}...")
 qdrant_client = None
 retries = 5
