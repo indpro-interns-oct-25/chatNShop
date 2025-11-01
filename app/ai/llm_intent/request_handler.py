@@ -110,7 +110,14 @@ class RequestHandler:
                 parsed: ParsedLLMResponse = parse_llm_response(str(raw_result))
                 processing_time_ms = None
             
-            logger.info(f"LLM intent result: intent={parsed.intent}, action_code={parsed.action_code}, confidence={parsed.confidence}")
+            # Extract and merge entities (LLM + rule-based fallback)
+            entities = self._extract_and_merge_entities(payload.user_input, parsed.entities)
+            
+            logger.info(
+                f"LLM intent result: intent={parsed.intent}, action_code={parsed.action_code}, "
+                f"confidence={parsed.confidence}, entities={'present' if entities else 'none'}"
+            )
+            
             return {
                 "triggered": True,
                 "intent": parsed.intent,
@@ -119,6 +126,7 @@ class RequestHandler:
                 "confidence": parsed.confidence,
                 "requires_clarification": False,
                 "clarification_message": None,
+                "entities": entities,  # NEW: Include entities in response
                 "metadata": {
                     **metadata,
                     "source": "llm",
@@ -310,6 +318,96 @@ class RequestHandler:
                 {"role": "user", "content": payload.user_input}
             ]
 
+    def _extract_and_merge_entities(self, user_query: str, llm_entities: Any) -> Optional[Dict[str, Any]]:
+        """
+        Extract and merge entities from LLM and rule-based sources.
+        
+        Strategy:
+        1. If LLM entities are complete, use them
+        2. Otherwise, extract via rule-based fallback
+        3. Merge both sources (LLM takes precedence)
+        
+        Args:
+            user_query: User input query
+            llm_entities: Entities extracted by LLM (Entities object or None)
+            
+        Returns:
+            Merged entities dict or None
+        """
+        try:
+            # Import entity extractor
+            from app.ai.entity_extraction.extractor import EntityExtractor
+            from app.ai.entity_extraction.schema import Entities
+            
+            # Check if LLM entities are sufficient
+            llm_has_entities = False
+            if llm_entities and hasattr(llm_entities, 'product_type'):
+                # Check if at least one meaningful entity is present
+                llm_has_entities = any([
+                    llm_entities.product_type,
+                    llm_entities.brand,
+                    llm_entities.category,
+                    llm_entities.color,
+                    llm_entities.size,
+                    (llm_entities.price_range and (
+                        llm_entities.price_range.min or llm_entities.price_range.max
+                    ))
+                ])
+            
+            # If LLM has complete entities, use them directly
+            if llm_has_entities:
+                logger.debug("Using entities from LLM (complete)")
+                if hasattr(llm_entities, 'dict'):
+                    return llm_entities.dict()
+                else:
+                    return llm_entities.__dict__ if hasattr(llm_entities, '__dict__') else None
+            
+            # Otherwise, fall back to rule-based extraction
+            logger.debug("Falling back to rule-based entity extraction")
+            extractor = EntityExtractor()
+            rule_entities = extractor.extract_entities(user_query)
+            
+            # If no LLM entities, return rule-based directly
+            if not llm_entities:
+                logger.debug("Using entities from rule-based extraction")
+                return rule_entities
+            
+            # Merge: LLM takes precedence, rule-based fills gaps
+            merged = rule_entities.copy() if rule_entities else {}
+            
+            if hasattr(llm_entities, 'dict'):
+                llm_dict = llm_entities.dict()
+            elif hasattr(llm_entities, '__dict__'):
+                llm_dict = llm_entities.__dict__
+            else:
+                llm_dict = {}
+            
+            # Override with LLM values where present
+            for key, value in llm_dict.items():
+                if value is not None:
+                    if key == 'price_range' and hasattr(value, 'dict'):
+                        merged[key] = value.dict()
+                    elif key == 'price_range' and isinstance(value, dict):
+                        merged[key] = value
+                    else:
+                        merged[key] = value
+            
+            logger.debug(f"Merged entities: LLM + rule-based")
+            return merged if merged else None
+            
+        except ImportError:
+            logger.warning("Entity extraction module not available")
+            # Return LLM entities as-is if available
+            if llm_entities:
+                if hasattr(llm_entities, 'dict'):
+                    return llm_entities.dict()
+                elif hasattr(llm_entities, '__dict__'):
+                    return llm_entities.__dict__
+            return None
+        except Exception as e:
+            logger.error(f"Error extracting/merging entities: {e}", exc_info=True)
+            return None
+    
     @staticmethod
     def _infer_category(action_code: Optional[str]) -> str:
         """Best-effort lookup of the category for a given action code."""

@@ -270,6 +270,7 @@ class DecisionEngine:
                             return {
                                 "status": "LLM_FALLBACK",
                                 "intent": resolved,
+                                "entities": llm_out.get("entities"),  # NEW: Pass entities
                                 "config_variant": ACTIVE_VARIANT
                             }
                 except Exception as e:

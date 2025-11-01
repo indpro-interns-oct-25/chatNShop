@@ -255,6 +255,7 @@ class ClassificationOutput(BaseModel):
     original_text: str = Field(..., description="Original input text")
     status: str = Field(..., description="Resolution status (e.g., CONFIDENT_KEYWORD, FALLBACK_*)")
     intent: Optional[Dict[str, Any]] = Field(default=None, description="Raw top intent payload for debug")
+    entities: Optional[Dict[str, Any]] = Field(default=None, description="Extracted entities (product, brand, color, etc.)")
 
 # 2. Create the classification POST endpoint
 @app.post(
@@ -268,16 +269,24 @@ class ClassificationOutput(BaseModel):
             "content": {
                 "application/json": {
                     "example": {
-                        "action_code": "ADD_TO_CART",
+                        "action_code": "SEARCH_PRODUCT",
                         "confidence_score": 0.92,
-                        "matched_keywords": ["add to cart"],
-                        "original_text": "Add this to my cart",
-                        "status": "CONFIDENT_KEYWORD",
+                        "matched_keywords": ["search", "shoes"],
+                        "original_text": "Show me red Nike running shoes under $100",
+                        "status": "LLM_CLASSIFICATION",
                         "intent": {
-                            "id": "ADD_TO_CART",
+                            "id": "SEARCH_PRODUCT",
                             "score": 0.92,
-                            "source": "keyword",
+                            "source": "llm",
                         },
+                        "entities": {
+                            "product_type": "shoes",
+                            "category": "running",
+                            "brand": "Nike",
+                            "color": "red",
+                            "size": null,
+                            "price_range": {"min": null, "max": 100, "currency": "USD"}
+                        }
                     }
                 }
             },
@@ -340,6 +349,7 @@ async def classify_intent(user_input: ClassificationInput) -> ClassificationOutp
             original_text=user_input.text,
             status=str(result.get("status", "UNKNOWN")),
             intent=result.get("intent"),
+            entities=result.get("entities"),  # NEW: Include entities in response
         )
 
     except Exception as e:
