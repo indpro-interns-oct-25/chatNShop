@@ -2,6 +2,10 @@
 Status Store - In-memory and Redis-based request status tracking.
 """
 
+from datetime import datetime, timezone
+from typing import Optional, Dict
+from app.schemas.request_status import RequestStatus, ResultSchema
+
 import json
 import os
 from datetime import datetime, timezone
@@ -49,6 +53,18 @@ class InMemoryStatusStore:
                 entry.completed_at = datetime.now(timezone.utc)
             self._store[request_id] = entry
 
+    def complete_request(self, request_id: str, result: Optional[ResultSchema] = None):
+        """Mark request as completed and store result."""
+        if request_id in self._store:
+            entry = self._store[request_id]
+            entry.status = "COMPLETED"
+            entry.completed_at = datetime.now(timezone.utc)
+            entry.result = result
+            self._store[request_id] = entry
+
+    def clear(self):
+        """Clear all entries (for testing)."""
+        self._store.clear()
     def complete_request(self, request_id: str, result: Optional[ResultSchema] = None, error: Optional[Dict[str, Any]] = None):
         """Mark request as completed and store result."""
         if request_id in self._store:
