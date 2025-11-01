@@ -1,4 +1,5 @@
 """
+LLM Worker (CNS-21)
 LLM Worker
 
 Processes ambiguous queries from the queue using LLM intent classification.
@@ -67,6 +68,18 @@ def process_message(message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         logger.error("❌ LLM handler not available, cannot process message")
         return None
     
+    query = message.get("query", "")
+    context = message.get("context", {})
+    
+    try:
+        # Build LLM request
+        llm_request = LLMIntentRequest(
+            user_input=query,
+            rule_intent=context.get("possible_intents", {}),
+            action_code=None,
+            top_confidence=0.0,
+            next_best_confidence=0.0,
+            is_fallback=True
     # Handle both message formats: user_query (current) and query (legacy)
     query = message.get("user_query") or message.get("query", "")
     context = message.get("_context") or message.get("context", {})
@@ -219,6 +232,7 @@ def llm_worker(poll_interval: int = 5, max_iterations: Optional[int] = None):
             message = queue_manager.dequeue_ambiguous_query(timeout=poll_interval)
             
             if message:
+                logger.info(f"📨 Processing message: {message['message_id']} | Query: '{message['query']}'")
                 message_id = message.get("message_id", "unknown")
                 logger.info(f"📨 Processing message: {message_id} | Query: '{message.get('query', '')}'")
                 
@@ -233,6 +247,9 @@ def llm_worker(poll_interval: int = 5, max_iterations: Optional[int] = None):
                 result = process_message(message)
                 
                 if result:
+                    # Enqueue result
+                    success = queue_manager.enqueue_classification_result(
+                        message_id=message["message_id"],
                     # Apply confidence calibration
                     original_confidence = result.get("confidence", 0.0)
                     calibrated_confidence = original_confidence
@@ -278,6 +295,9 @@ def llm_worker(poll_interval: int = 5, max_iterations: Optional[int] = None):
                     )
                     
                     if not success:
+                        logger.warning(f"⚠️ Failed to enqueue result for {message['message_id']}")
+                else:
+                    # Processing failed, retry or move to DLQ
                         logger.warning(f"⚠️ Failed to enqueue result for {message_id}")
                 else:
                     # Processing failed, update status to FAILED

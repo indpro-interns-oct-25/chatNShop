@@ -1,4 +1,7 @@
 """
+Queue Management API Endpoints (CNS-21)
+
+Provides endpoints for monitoring and managing the queue infrastructure.
 Queue Management API Endpoints
 
 Provides endpoints for monitoring and managing the queue infrastructure.

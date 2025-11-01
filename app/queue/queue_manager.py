@@ -103,6 +103,16 @@ class QueueManager:
             logger.warning("⚠️ Queue unavailable, cannot enqueue message")
             return None
             
+        message_id = f"msg_{int(time.time() * 1000)}"
+        
+        message = {
+            "message_id": message_id,
+            "query": query,
+            "context": context,
+            "timestamp": datetime.utcnow().isoformat(),
+            "retry_count": 0,
+            "priority": priority
+        }
         # Check if context has a full message from producer
         # This allows preserving the standard message format
         if "_full_message" in context:

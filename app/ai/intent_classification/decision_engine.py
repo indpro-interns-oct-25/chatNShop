@@ -3,6 +3,8 @@ Decision Engine
 Handles hybrid rule-based + embedding + LLM fallback intent classification.
 Now includes resilience, caching, structured logging, and queue-based escalation.
 """
+import os
+from typing import List, Dict, Any
 
 import os
 import re
@@ -31,6 +33,10 @@ try:
     from app.ai.llm_intent.openai_client import OpenAIClient as _OpenAIClient
     from app.schemas.llm_intent import LLMIntentRequest as _LLMReq
 except Exception:
+    _LLMHandler = None  # type: ignore
+    _OpenAIClient = None  # type: ignore
+    _LLMReq = None  # type: ignore
+# --- END CONFIG MANAGER INTEGRATION ---
     _LLMHandler = None
     _OpenAIClient = None
     _LLMReq = None
@@ -304,6 +310,7 @@ class DecisionEngine:
             # Deterministic selection on low-confidence: pick top blended action
             print(f"⚠ Blended result is NOT confident. Reason: {reason}")
             
+            # Try queue-based async processing for ambiguous queries (CNS-21)
             # Try queue-based async processing for ambiguous queries
             # Enabled by default for main endpoint
             # To disable queue: set ENABLE_LLM_QUEUE=false in environment
