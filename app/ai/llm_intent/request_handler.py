@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional
 from app.schemas.llm_intent import LLMIntentRequest
 
 # ---------------------------------------------------------------------
-# External Integrations (from other branch)
+# External Integrations
 # ---------------------------------------------------------------------
 from .confidence_calibrator import TriggerContext, should_trigger_llm
 from .entity_extractor import INTENT_CATEGORIES
@@ -18,6 +18,19 @@ from .fallback_manager import build_fallback_response
 from .openai_client import OpenAIClient
 from .response_parser import LLMIntentResponse as ParsedLLMResponse, parse_llm_response
 from .prompt_loader import PromptLoader, PromptLoadError, get_prompt_loader
+
+# Error handling components
+from .resilient_openai_client import ResilientOpenAIClient, LLMRequestError
+from .error_handler import (
+    handle_timeout_error,
+    handle_rate_limit_error,
+    handle_service_unavailable_error,
+    handle_auth_error,
+    handle_context_length_error,
+    log_error_with_full_context,
+    build_user_error_response
+)
+from app.core.alert_notifier import send_alert
 
 # ---------------------------------------------------------------------
 # Logging Configuration
@@ -91,29 +104,100 @@ class RequestHandler:
     # Main entry point
     # -----------------------------------------------------------------
     def handle(self, request: LLMIntentRequest) -> Dict[str, Any]:
-        """Handle an intent classification request with retries and fallbacks."""
-
+        """
+        Handle an intent classification request with retries and fallbacks.
+        
+        Flow:
+        1. Check cache first (if enabled and high-confidence not met)
+        2. High-confidence rule-based → skip LLM
+        3. Try LLM with retries and comprehensive error handling
+        4. All attempts failed → escalate and fallback (with cache fallback)
+        """
         logging.info(f"🔍 Received input: '{request.user_input}'")
+
+        # 0️⃣ Check cache first (before rule-based decision) if low confidence
+        if self.response_cache and request.top_confidence < 0.85:
+            try:
+                cached = self.response_cache.get(request.user_input)
+                if cached:
+                    logger.info("✅ Cache hit, returning cached response")
+                    return {
+                        **cached,
+                        "metadata": {
+                            **cached.get("metadata", {}),
+                            "source": "cache",
+                            "cache_hit": True
+                        }
+                    }
+            except Exception as e:
+                logger.warning(f"Cache lookup failed: {e}")
 
         # 1️⃣ High-confidence rule-based intent: no LLM required
         if request.top_confidence >= 0.85 and not request.is_fallback:
             logging.info("✅ Rule-based classifier confident, skipping LLM call.")
             return self._retain_rule_result(request)
 
-        # 2️⃣ Otherwise: attempt LLM classification with retries
+        # 2️⃣ Otherwise: attempt LLM classification with retries and error handling
+        last_error = None
+        last_error_code = "unknown_error"
+        
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                logging.info(f"🧠 Attempt {attempt} to query LLM...")
+                logging.info(f"🧠 Attempt {attempt}/{MAX_RETRIES} to query LLM...")
                 result = self._query_llm(request)
                 if result:
                     logging.info(f"✅ LLM succeeded on attempt {attempt}.")
+                    
+                    # Cache successful result (if high confidence)
+                    if self.response_cache and result.get("confidence", 0) > 0.7:
+                        try:
+                            self.response_cache.set(request.user_input, result)
+                            logger.debug("Cached successful LLM response")
+                        except Exception as e:
+                            logger.warning(f"Failed to cache result: {e}")
+                    
                     return result
-            except TimeoutError:
+                    
+            except LLMRequestError as exc:
+                # Structured error from ResilientOpenAIClient
+                last_error = exc
+                last_error_code = exc.code
+                
+                # Build error context
+                error_context = {
+                    "user_input": request.user_input,
+                    "error_code": exc.code,
+                    "error_details": exc.details,
+                    "attempt": attempt,
+                    "timestamp": time.time(),
+                }
+                
+                # Log with full context
+                log_error_with_full_context(exc, error_context)
+                
+                # Send alerts based on error type
+                if exc.code == "rate_limit":
+                    send_alert("RATE_LIMIT_EXCEEDED", error_context, severity="warning")
+                elif exc.code == "timeout":
+                    send_alert("LLM_TIMEOUT", error_context, severity="warning")
+                elif exc.code == "server_error":
+                    send_alert("LLM_SERVER_ERROR", error_context, severity="error")
+                elif exc.code == "auth_error":
+                    send_alert("LLM_AUTH_ERROR", error_context, severity="critical")
+                
+                logging.warning(f"⚠️ LLM error on attempt {attempt}: {exc.code}")
+                
+            except TimeoutError as exc:
+                last_error = exc
+                last_error_code = "timeout"
                 logging.warning(f"⚠️ Timeout occurred on attempt {attempt}.")
-            except Exception as e:
-                logging.error(f"❌ Error on attempt {attempt}: {str(e)}")
+                
+            except Exception as exc:
+                last_error = exc
+                last_error_code = "unknown_error"
+                logging.error(f"❌ Unexpected error on attempt {attempt}: {str(exc)}")
 
-            # Retry delay
+            # Retry delay (if not last attempt)
             if attempt < MAX_RETRIES:
                 delay = RETRY_BACKOFF[attempt - 1]
                 logging.info(f"⏳ Retrying in {delay}s...")
@@ -122,6 +206,8 @@ class RequestHandler:
         # 3️⃣ All attempts failed — escalate and return fallback
         logging.critical("🚨 All LLM attempts failed. Triggering escalation path.")
         self._escalate_failure(request)
+        
+        # Return fallback (will try cache fallback first, then UNCLEAR)
         return self._fallback_unclear_response(request)
 
     # -----------------------------------------------------------------
@@ -159,16 +245,9 @@ class RequestHandler:
                 raise RuntimeError(f"OpenAI API error: {result['error']}")
 
             parsed: ParsedLLMResponse = parse_llm_response(result.get("response", ""))
-            logger.info(
-                f"LLM intent result: intent={parsed.intent}, action_code={parsed.action_code}, confidence={parsed.confidence}"
-            )
-
-                # String response - parse JSON
-                parsed: ParsedLLMResponse = parse_llm_response(str(raw_result))
-                processing_time_ms = None
             
             # Extract and merge entities (LLM + rule-based fallback)
-            entities = self._extract_and_merge_entities(payload.user_input, parsed.entities)
+            entities = self._extract_and_merge_entities(request.user_input, parsed.entities)
             
             logger.info(
                 f"LLM intent result: intent={parsed.intent}, action_code={parsed.action_code}, "
@@ -222,7 +301,27 @@ class RequestHandler:
         }
 
     def _fallback_unclear_response(self, request: LLMIntentRequest) -> Dict[str, Any]:
-        """Return fallback intent when LLM is uncertain or fails."""
+        """
+        Return fallback intent when LLM is uncertain or fails.
+        
+        Now integrates with cache fallback (Task 19) - will try to find
+        a similar cached response before returning default UNCLEAR.
+        """
+        # Use enhanced fallback with cache integration
+        fallback_data = build_fallback_response(
+            reason="llm_failure_or_unclear",
+            user_query=request.user_input
+        )
+        
+        # If fallback came from cache, return it wrapped with our standard structure
+        if fallback_data.get("metadata", {}).get("fallback_source") == "cache":
+            logger.info(f"Using cached response as fallback for unclear query")
+            return {
+                "triggered": True,
+                **fallback_data
+            }
+        
+        # Otherwise, return UNCLEAR with suggested questions
         clarification_msg = "I couldn't determine your intent clearly. Could you clarify what you meant?"
 
         fallback = {
@@ -247,70 +346,7 @@ class RequestHandler:
             "status": "UNCLEAR",
             "variant": "A"
         }
-        # Check cache first if enabled
-        if self.response_cache.enabled:
-            cached_response = self.response_cache.get(
-                query=payload.user_input,
-                context=payload.metadata if hasattr(payload, 'metadata') else None
-            )
-            if cached_response:
-                logger.info(f"✅ Using cached LLM response for query: '{payload.user_input[:50]}...'")
-                # Add cache indicator to metadata
-                if isinstance(cached_response, dict):
-                    cached_response = cached_response.copy()
-                    cached_response['_from_cache'] = True
-                return cached_response
-
-        # Cache miss - call LLM API
-        request_body = {
-            "messages": self.build_messages(payload),
-            "temperature": opts.get("temperature", getattr(self.client, "temperature", 0.3)),
-            "max_tokens": opts.get("max_tokens", getattr(self.client, "max_tokens", 400)),
-        }
         
-        # Extract response from OpenAI client (it returns dict with 'response' key)
-        result = self.client.complete(request_body, **opts)
-        
-        # Handle OpenAI client response format
-        if "error" in result:
-            logger.error(f"OpenAI client error: {result}")
-            raise RuntimeError(f"OpenAI API error: {result.get('error', 'Unknown error')}")
-        
-        # Extract the actual response text/content
-        if "response" in result:
-            # OpenAI client returns {"response": "...", "latency_ms": ..., "usage": ...}
-            llm_response = {
-                "intent": None,  # Will be parsed
-                "intent_category": None,
-                "action_code": None,
-                "confidence": None,
-                "processing_time_ms": result.get("latency_ms"),
-                "reasoning": None,
-                "raw_response": result["response"],
-            }
-        else:
-            # Fallback: assume result is the response directly
-            llm_response = {
-                "intent": None,
-                "intent_category": None,
-                "action_code": None,
-                "confidence": None,
-                "processing_time_ms": None,
-                "reasoning": None,
-                "raw_response": result if isinstance(result, str) else str(result),
-            }
-        
-        # Cache the response if enabled
-        if self.response_cache.enabled:
-            self.response_cache.set(
-                query=payload.user_input,
-                response=llm_response,
-                context=payload.metadata if hasattr(payload, 'metadata') else None
-            )
-        
-        return llm_response
-
-        logging.warning(f"🤔 Fallback triggered for unclear intent: '{request.user_input}'")
         return fallback
 
     def _build_response(self, intent: str, confidence: float, request: LLMIntentRequest) -> Dict[str, Any]:
@@ -336,10 +372,33 @@ class RequestHandler:
         }
 
     def _escalate_failure(self, request: LLMIntentRequest):
-        """Escalate after all retries fail."""
+        """
+        Escalate after all retries fail.
+        
+        Sends critical alert to monitoring/alert system with full context.
+        """
+        # Build escalation context
+        context = {
+            "user_input": request.user_input,
+            "rule_intent": request.rule_intent,
+            "top_confidence": request.top_confidence,
+            "action_code": request.action_code,
+            "attempts": MAX_RETRIES,
+            "timestamp": time.time(),
+            "error_code": "all_retries_failed",
+        }
+        
+        # Log critical error
         logging.critical(
-            f"🚨 ESCALATION_NEEDED: LLM completely failed for input '{request.user_input}' "
+            f"🚨 ESCALATION: LLM completely failed for input '{request.user_input}' "
             f"(rule_intent={request.rule_intent}, attempts={MAX_RETRIES})"
+        )
+        
+        # Send critical alert (always escalates, not subject to frequency throttling)
+        send_alert(
+            event_type="LLM_COMPLETE_FAILURE",
+            context=context,
+            severity="critical"
         )
 
     # -----------------------------------------------------------------
@@ -406,41 +465,6 @@ class RequestHandler:
                 return [{"role": "user", "content": payload.user_input}]
         else:
             return [{"role": "user", "content": payload.user_input}]
-                # Production mode: use system prompt + few-shot examples + context
-                messages = self.prompt_loader.build_messages(
-                    user_query=payload.user_input,
-                    context=context
-                )
-                logger.debug(
-                    f"Built messages with system prompt, {len(self.prompt_loader.few_shot_examples)} "
-                    f"few-shot examples, and context (version: {self.prompt_loader.version})"
-                )
-                return messages
-            except (PromptLoadError, Exception) as e:
-                logger.warning(
-                    f"Failed to use prompts, falling back to simple message: {e}"
-                )
-                # Fallback to simple message with context if available
-                if context and self.prompt_loader:
-                    formatted_context = self.prompt_loader.format_context(context)
-                    if formatted_context:
-                        content = f"{formatted_context}\n\n## Current Query:\n{payload.user_input}"
-                        return [{"role": "user", "content": content}]
-                return [
-                    {"role": "user", "content": payload.user_input}
-                ]
-        else:
-            # Fallback mode: simple user message with context if available
-            if context and self.prompt_loader:
-                formatted_context = self.prompt_loader.format_context(context)
-                if formatted_context:
-                    content = f"{formatted_context}\n\n## Current Query:\n{payload.user_input}"
-                    return [{"role": "user", "content": content}]
-            
-            logger.debug("Using simple user message (prompts not available)")
-            return [
-                {"role": "user", "content": payload.user_input}
-            ]
 
     def _extract_and_merge_entities(self, user_query: str, llm_entities: Any) -> Optional[Dict[str, Any]]:
         """
