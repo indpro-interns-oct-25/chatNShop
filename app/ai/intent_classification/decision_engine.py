@@ -300,6 +300,108 @@ class DecisionEngine:
             blended_results.sort(key=lambda x: (x.get("score", 0.0), x.get("embedding_score", 0.0)), reverse=True)
             top = blended_results[0]
             logger.info("✅ Selecting top blended action deterministically")
+        else:
+            # Deterministic selection on low-confidence: pick top blended action
+            print(f"⚠ Blended result is NOT confident. Reason: {reason}")
+            
+            # Try queue-based async processing for ambiguous queries
+            # Enabled by default for main endpoint
+            # To disable queue: set ENABLE_LLM_QUEUE=false in environment
+            enable_queue = os.getenv("ENABLE_LLM_QUEUE", "true").lower() == "true"
+            
+            if enable_queue:
+                try:
+                    from app.queue.integration import send_to_llm_queue
+                    from app.ai.intent_classification.ambiguity_resolver import detect_intent
+                    
+                    # Check if this is an ambiguous/unclear query
+                    ambiguity_result = detect_intent(query)
+                    
+                    if ambiguity_result.get("action") in ["AMBIGUOUS", "UNCLEAR"]:
+                        # Send to queue for async LLM processing
+                        message_id = send_to_llm_queue(
+                            query=query,
+                            ambiguity_result=ambiguity_result,
+                            user_id="anonymous",  # TODO: Get from request context
+                            is_premium=False  # TODO: Get from user profile
+                        )
+                        
+                        if message_id:
+                            print(f"✅ Sent ambiguous query to queue: {message_id}")
+                            # Return a pending status indicating async processing
+                            return {
+                                "status": "QUEUED_FOR_LLM",
+                                "intent": {
+                                    "id": "PROCESSING",
+                                    "intent": "PROCESSING",
+                                    "score": 0.0,
+                                    "source": "queue",
+                                    "message_id": message_id
+                                },
+                                "message": "Query sent to LLM queue for processing",
+                                "config_variant": ACTIVE_VARIANT
+                            }
+                except ImportError:
+                    # Queue integration not available, continue with sync LLM fallback
+                    pass
+                except Exception as e:
+                    print(f"⚠️ Queue integration error: {e}. Falling back to sync processing.")
+            
+            # Attempt LLM fallback if available (synchronous)
+            if _LLMHandler and _LLMReq and _OpenAIClient:
+                try:
+                    # Initialize OpenAI client and pass to RequestHandler
+                    import os
+                    api_key = os.getenv("OPENAI_API_KEY")
+                    if not api_key:
+                        print("⚠️ OPENAI_API_KEY not set, skipping LLM fallback")
+                    else:
+                        llm_client = _OpenAIClient()
+                        handler = _LLMHandler(client=llm_client)
+                        # Build minimal LLM request using top keyword/embedding confidences if present
+                        top_kw = keyword_results[0]['score'] if keyword_results else 0.0
+                        next_kw = keyword_results[1]['score'] if len(keyword_results) > 1 else 0.0
+                        llm_req = _LLMReq(
+                            user_input=query,
+                            rule_intent=blended_results[0]['id'] if blended_results else None,
+                            action_code=blended_results[0]['id'] if blended_results else None,
+                            top_confidence=float(top_kw),
+                            next_best_confidence=float(next_kw),
+                            is_fallback=True,
+                        )
+                        llm_out = handler.handle(llm_req)
+                        if llm_out and isinstance(llm_out, dict):
+                            # Return LLM-resolved action_code as final
+                            resolved = {
+                                "id": llm_out.get("action_code"),
+                                "intent": llm_out.get("action_code"),
+                                "score": llm_out.get("confidence", 0.0),
+                                "source": "llm",
+                                "reason": "llm_fallback"
+                            }
+                            return {
+                                "status": "LLM_FALLBACK",
+                                "intent": resolved,
+                                "entities": llm_out.get("entities"),  # NEW: Pass entities
+                                "config_variant": ACTIVE_VARIANT
+                            }
+                except Exception as e:
+                    print(f"⚠️ LLM fallback error: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    pass
+            if blended_results:
+                # If multiple with close scores, prefer one with higher embedding_score
+                blended_results.sort(key=lambda x: (x.get('score', 0.0), x.get('embedding_score', 0.0)), reverse=True)
+                top = blended_results[0]
+                print("✅ Selecting top blended action deterministically")
+                return {
+                    "status": f"BLENDED_TOP_{reason}",
+                    "intent": top,
+                    "config_variant": ACTIVE_VARIANT
+                }
+            # Final fallback to generic search
+            print(f"⚠ No suitable results, returning generic search")
             return {
                 "status": f"BLENDED_TOP_{reason}",
                 "intent": top,

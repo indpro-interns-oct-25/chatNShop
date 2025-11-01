@@ -1,36 +1,54 @@
 """
-Ambiguity Resolver for Intent Classification (CNS-12)
+Ambiguity Resolver for Intent Classification
 
 Handles ambiguous and multi-intent user queries by:
 1. Detecting when user input matches multiple intents (AMBIGUOUS)
 2. Detecting when user input has low confidence (UNCLEAR)
-3. Logging ambiguous cases for analysis
+3. Publishing ambiguous queries to classification queue
 4. Providing fallback behavior
 
 Dependencies:
-- CNS-7: Uses action codes and intent structure from IntentTaxonomy
-- CNS-8: Uses keyword dictionaries that align with CNS-7 action codes
+- Uses action codes and intent structure from IntentTaxonomy
+- Uses keyword dictionaries aligned with action codes
 
 Confidence Thresholds:
 - UNCLEAR_THRESHOLD (0.4): Below this = unclear intent
 - MIN_CONFIDENCE (0.6): Above this = valid intent
 - AMBIGUOUS: Multiple intents above this = AMBIGUOUS
+
+This module now integrates with the queue producer to handle ambiguous cases
+that need further processing by the ML-based classifier.
 """
 
 import os
 import json
 import sys
+import logging
+from datetime import datetime
+from typing import Dict, Any, Optional, List, cast
 
 # Add parent directory to path for imports when running standalone
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-# ✅ Import from CNS-8 (Keyword Dictionaries aligned with CNS-7 action codes)
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Import keyword dictionaries aligned with action codes
 try:
     from .keywords.loader import load_keywords
+    from ..queue_producer import IntentQueueProducer, IntentScore, RuleBasedResult
 except ImportError:
     from keywords.loader import load_keywords
+    from app.ai.queue_producer import IntentQueueProducer, IntentScore, RuleBasedResult
+
+# Initialize queue producer
+_queue_producer = IntentQueueProducer()
 
 # ------------------ CONFIGURATION ------------------
 # Centralize thresholds via app.ai.config
@@ -47,10 +65,10 @@ LOG_DIR = os.path.abspath(LOG_DIR)
 os.makedirs(LOG_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOG_DIR, "ambiguous.jsonl")
 
-# ------------------ LOAD DATA FROM CNS-8 (aligned with CNS-7) ------------------
-# Load keyword dictionaries from CNS-8
-# Action codes in CNS-8 match CNS-7 IntentTaxonomy action codes
-# (e.g., SEARCH_PRODUCT, ADD_TO_CART as defined in CNS-7)
+# ------------------ LOAD KEYWORD DATA ------------------
+# Load keyword dictionaries
+# Action codes match IntentTaxonomy definitions
+# (e.g., SEARCH_PRODUCT, ADD_TO_CART)
 loaded_keywords = load_keywords()
 
 INTENT_KEYWORDS = {
@@ -69,9 +87,9 @@ def log_ambiguous_case(user_input, intent_scores):
 
 def calculate_confidence(user_input, keywords):
     """
-    Calculate confidence score using keywords from CNS-8.
+    Calculate confidence score using keywords.
     
-    CNS-8 keywords align with CNS-7 action codes as requested by reviewer.
+    Keywords align with action codes from the intent taxonomy.
     
     Args:
         user_input: User's query (lowercase)
@@ -101,34 +119,49 @@ def calculate_confidence(user_input, keywords):
         return 0.95
 
 
+def find_matched_keywords_for_action(user_input_lower: str, keywords: List[str]) -> List[str]:
+    """Return the list of keywords that matched in the user_input (case-insensitive)."""
+    matched = [k for k in keywords if k.lower() in user_input_lower]
+    return matched
+
+
 def fallback_behavior(user_input):
     """Handle unclear or low-confidence user inputs."""
     print(f"[Fallback] Input unclear or low confidence: '{user_input}'")
     print("Sending this input to LLM or asking user for clarification...")
 
 
-def detect_intent(user_input):
+def detect_intent(user_input: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Detect user intent with ambiguity resolution.
     
-    Uses CNS-8 keywords that align with CNS-7 action codes (as requested by reviewer).
-    Returns action codes defined in CNS-7 IntentTaxonomy.
+    Uses keywords that align with action codes from the intent taxonomy.
+    Returns action codes defined in IntentTaxonomy.
     
     Uses standardized confidence thresholds:
     - < 0.4 (UNCLEAR_THRESHOLD): Returns UNCLEAR
     - >= 0.6 (MIN_CONFIDENCE): Valid intent
     - Multiple >= 0.6: Returns AMBIGUOUS
     
+    For ambiguous or unclear intents, publishes to the classification queue
+    for further processing.
+    
+    Args:
+        user_input: The user's query text
+        metadata: Optional additional context about the request
+        
     Returns:
-        dict: Contains action, confidence, and possible_intents
-        - action: "UNCLEAR", "AMBIGUOUS", or specific CNS-7 action code
+        dict: Contains action, confidence, possible_intents and request_id
+        - action: "UNCLEAR", "AMBIGUOUS", or specific action code
         - confidence: confidence score (if single intent)
         - possible_intents: all detected action codes with scores
+        - request_id: tracking ID for queued messages (if applicable)
     """
     user_input_lower = user_input.lower()
     intent_confidences = {}
+    request_id = None
 
-    # Calculate confidence for each CNS-7 action code using CNS-8 keywords
+    # Calculate confidence for each action code using keywords
     for action_code, keywords in INTENT_KEYWORDS.items():
         confidence = calculate_confidence(user_input_lower, keywords)
         if confidence > 0:
@@ -140,24 +173,88 @@ def detect_intent(user_input):
         if conf >= MIN_CONFIDENCE
     }
 
+    def _format_intent_scores(intents_dict: Dict[str, float]) -> List[IntentScore]:
+        return [{"intent": action_code, "score": float(score)}
+                for action_code, score in intents_dict.items()]
+
     # Case 1: No high-confidence intents → UNCLEAR
     if not high_conf_intents:
         log_ambiguous_case(user_input, {"type": "unclear", "intents": intent_confidences})
-        fallback_behavior(user_input)
+        
+        try:
+            # Queue for further processing
+            # Build rule_based_result shape per spec
+            matched_keywords = []
+            for ac, kws in INTENT_KEYWORDS.items():
+                matched_keywords.extend(find_matched_keywords_for_action(user_input_lower, kws))
+
+            rb_result = cast(dict, {
+                "action_code": "UNCLEAR",
+                "confidence": round(max(intent_confidences.values()) if intent_confidences else 0.0, 2),
+                "matched_keywords": matched_keywords
+            })
+
+            request_id = _queue_producer.publish_ambiguous_query(
+                query=user_input,
+                intent_scores=_format_intent_scores(intent_confidences),
+                priority=False,  # Unclear cases are not typically priority
+                metadata={"type": "unclear", **(metadata or {})},
+                session_id=(metadata or {}).get('session_id'),
+                user_id=(metadata or {}).get('user_id'),
+                conversation_history=(metadata or {}).get('conversation_history'),
+                rule_based_result=cast(RuleBasedResult, rb_result)
+            )
+            logger.info(f"Queued unclear intent for processing with request_id={request_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to queue unclear intent: {str(e)}", exc_info=True)
+            fallback_behavior(user_input)
+            
         return {
             "action": "UNCLEAR",
-            "possible_intents": intent_confidences
+            "possible_intents": intent_confidences,
+            "request_id": request_id
         }
 
     # Case 2: Multiple high-confidence intents → AMBIGUOUS
     if len(high_conf_intents) > 1:
         log_ambiguous_case(user_input, {"type": "multiple", "intents": high_conf_intents})
+        
+        try:
+            # Build rule_based_result for ambiguous case
+            matched_keywords = []
+            for ac in high_conf_intents.keys():
+                matched_keywords.extend(find_matched_keywords_for_action(user_input_lower, INTENT_KEYWORDS.get(ac, [])))
+
+            rb_result = cast(dict, {
+                "action_code": "AMBIGUOUS",
+                "confidence": round(max(high_conf_intents.values()), 2),
+                "matched_keywords": matched_keywords
+            })
+
+            # Queue ambiguous case with priority
+            request_id = _queue_producer.publish_ambiguous_query(
+                query=user_input,
+                intent_scores=_format_intent_scores(high_conf_intents),
+                priority=True,  # Ambiguous high-confidence cases are priority
+                metadata={"type": "ambiguous", **(metadata or {})},
+                session_id=(metadata or {}).get('session_id'),
+                user_id=(metadata or {}).get('user_id'),
+                conversation_history=(metadata or {}).get('conversation_history'),
+                rule_based_result=cast(RuleBasedResult, rb_result)
+            )
+            logger.info(f"Queued ambiguous intent for processing with request_id={request_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to queue ambiguous intent: {str(e)}", exc_info=True)
+            
         return {
             "action": "AMBIGUOUS",
-            "possible_intents": high_conf_intents
+            "possible_intents": high_conf_intents,
+            "request_id": request_id
         }
 
-    # Case 3: Single clear intent → Return CNS-7 action code
+    # Case 3: Single clear intent → Return action code
     final_action_code = list(high_conf_intents.keys())[0]
     return {
         "action": final_action_code,
@@ -168,20 +265,49 @@ def detect_intent(user_input):
 
 # ------------------ MAIN (for testing) ------------------
 
-if __name__ == "__main__":
+def run_demo():
+    """Run an interactive demo of the ambiguity resolver with queue integration."""
     print("Welcome! Type your message to detect intent (type 'exit' to quit).")
 
-    # Print summary of loaded CNS-7 action codes via CNS-8 keywords
-    print(f"\nLoaded {len(INTENT_KEYWORDS)} action codes from CNS-7 (via CNS-8 keywords):")
+    # Print summary of loaded action codes
+    print(f"\nLoaded {len(INTENT_KEYWORDS)} action codes from intent taxonomy:")
     for action_code, keywords in list(INTENT_KEYWORDS.items())[:10]:
         print(f"  - {action_code}: {len(keywords)} keywords")
     if len(INTENT_KEYWORDS) > 10:
         print(f"  ... and {len(INTENT_KEYWORDS) - 10} more action codes")
+        
+    print("\nQueue producer initialized and ready to process ambiguous queries.")
+    print("Ambiguous or unclear intents will be queued for ML processing.")
+    print("\nTest queries to try:")
+    print("1. 'show red shoes' (single clear intent)")
+    print("2. 'show red shoes and add to cart' (ambiguous - multiple intents)")
+    print("3. 'help me please' (unclear intent)")
+
+if __name__ == "__main__":
+    run_demo()
 
     while True:
-        user_input = input("\nYour input: ")
-        if user_input.lower() == "exit":
-            print("Goodbye!")
+        try:
+            user_input = input("\nYour input: ")
+            if user_input.lower() == "exit":
+                print("Goodbye!")
+                break
+                
+            # Add some test metadata
+            metadata = {
+                "session_id": "test-session",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            result = detect_intent(user_input, metadata)
+            print("\nDetected Result:", json.dumps(result, indent=4))
+            
+            if result.get("request_id"):
+                print(f"\n🔄 Query queued for ML processing with ID: {result['request_id']}")
+                
+        except KeyboardInterrupt:
+            print("\nGoodbye!")
             break
-        result = detect_intent(user_input)
-        print("Detected Result:", json.dumps(result, indent=4))
+        except Exception as e:
+            print(f"\n❌ Error: {str(e)}")
+            logger.error("Error processing input", exc_info=True)

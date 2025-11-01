@@ -1,5 +1,5 @@
 """
-Queue Manager (CNS-21)
+Queue Manager
 
 Manages message queue operations for LLM intent classification.
 Handles input/output queues, dead letter queue, and retry logic.
@@ -20,7 +20,7 @@ class QueueManager:
     Manages Redis-based message queue for asynchronous LLM processing.
     
     Queue Flow:
-    1. Ambiguous queries from CNS-12 → AMBIGUOUS_QUERY_QUEUE
+    1. Ambiguous queries from rule-based classifier → AMBIGUOUS_QUERY_QUEUE
     2. LLM processes queries → CLASSIFICATION_RESULT_QUEUE
     3. Failed messages → DEAD_LETTER_QUEUE
     """
@@ -103,16 +103,29 @@ class QueueManager:
             logger.warning("⚠️ Queue unavailable, cannot enqueue message")
             return None
             
-        message_id = f"msg_{int(time.time() * 1000)}"
-        
-        message = {
-            "message_id": message_id,
-            "query": query,
-            "context": context,
-            "timestamp": datetime.utcnow().isoformat(),
-            "retry_count": 0,
-            "priority": priority
-        }
+        # Check if context has a full message from producer
+        # This allows preserving the standard message format
+        if "_full_message" in context:
+            full_message = context["_full_message"]
+            message_id = full_message.get("request_id", f"msg_{int(time.time() * 1000)}")
+            # Use the full message format from producer
+            message = full_message
+            # Add internal fields needed by queue_manager
+            message["message_id"] = message_id
+            message["retry_count"] = 0
+            # Store original context separately
+            message["_context"] = {k: v for k, v in context.items() if k != "_full_message"}
+        else:
+            # Legacy format (backward compatibility)
+            message_id = f"msg_{int(time.time() * 1000)}"
+            message = {
+                "message_id": message_id,
+                "query": query,
+                "context": context,
+                "timestamp": datetime.utcnow().isoformat(),
+                "retry_count": 0,
+                "priority": priority
+            }
         
         try:
             # Use sorted set for priority queue

@@ -8,6 +8,13 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Union
 
+try:
+    from app.ai.entity_extraction.schema import Entities, PriceRange
+except ImportError:
+    # Fallback if entity extraction not available
+    Entities = None  # type: ignore
+    PriceRange = None  # type: ignore
+
 logger = logging.getLogger("app.llm_intent.response_parser")
 
 
@@ -21,6 +28,7 @@ class LLMIntentResponse:
     confidence: float
     processing_time_ms: Optional[float] = None
     reasoning: Optional[str] = None
+    entities: Optional[Any] = None  # Type: Entities or None
 
 
 EXPECTED_SCHEMA: Dict[str, str] = {
@@ -182,9 +190,37 @@ def parse_llm_response(raw: Union[str, Dict[str, Any]]) -> LLMIntentResponse:
             _infer_intent_from_action_code(action_code)
         )
         
+        # Extract entities if available
+        entities = None
+        if Entities and "entities" in parsed_json:
+            try:
+                entities_data = parsed_json["entities"]
+                if entities_data and isinstance(entities_data, dict):
+                    # Parse price_range if present
+                    price_range_data = entities_data.get("price_range")
+                    if price_range_data and isinstance(price_range_data, dict) and PriceRange:
+                        price_range = PriceRange(**price_range_data)
+                    else:
+                        price_range = None
+                    
+                    # Create Entities object
+                    entities = Entities(
+                        product_type=entities_data.get("product_type"),
+                        category=entities_data.get("category"),
+                        brand=entities_data.get("brand"),
+                        color=entities_data.get("color"),
+                        size=entities_data.get("size"),
+                        price_range=price_range
+                    )
+                    logger.debug(f"Extracted entities: {entities}")
+            except Exception as e:
+                logger.warning(f"Failed to parse entities from LLM response: {e}")
+                entities = None
+        
         logger.debug(
             f"Parsed LLM response: action_code={action_code}, "
-            f"confidence={confidence:.2f}, category={intent_category}"
+            f"confidence={confidence:.2f}, category={intent_category}, "
+            f"entities={'present' if entities else 'none'}"
         )
         
         return LLMIntentResponse(
@@ -194,6 +230,7 @@ def parse_llm_response(raw: Union[str, Dict[str, Any]]) -> LLMIntentResponse:
             confidence=confidence,
             processing_time_ms=parsed_json.get("processing_time_ms"),
             reasoning=reasoning,
+            entities=entities,
         )
         
     except (KeyError, TypeError, ValueError) as exc:

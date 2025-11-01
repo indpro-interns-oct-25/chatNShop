@@ -44,6 +44,11 @@ try:
     QUEUE_ROUTER_AVAILABLE = True
 except ImportError:
     QUEUE_ROUTER_AVAILABLE = False
+try:
+    from app.api.v1.cache import router as cache_router
+    CACHE_ROUTER_AVAILABLE = True
+except ImportError:
+    CACHE_ROUTER_AVAILABLE = False
 print("Successfully imported Decision Engine.")
 
 # ✅ Qdrant client setup
@@ -53,6 +58,7 @@ from qdrant_client import QdrantClient, models
 load_dotenv()
 
 # ✅ Queue Infrastructure Import (CNS-21)
+# --- Queue Infrastructure Import ---
 try:
     from app.queue.queue_manager import queue_manager
     from app.queue.monitor import queue_monitor
@@ -103,6 +109,13 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting Intent Classification API...")
 
     # Queue initialization
+    """
+    Application lifespan context manager.
+    Handles startup and shutdown events.
+    """
+    print(" Starting Intent Classification API...")
+    
+    # --- Initialize Queue Infrastructure ---
     if QUEUE_AVAILABLE and queue_manager:
         try:
             if queue_manager.health_check():
@@ -237,6 +250,61 @@ class ClassificationOutput(BaseModel):
 
 
 @app.post("/classify", tags=["Intent Classification"], response_model=ClassificationOutput)
+    confidence_score: float = Field(..., ge=0.0, le=1.0, description="Confidence (0-1)")
+    matched_keywords: List[str] = Field(default_factory=list, description="Matched keyword phrases")
+    original_text: str = Field(..., description="Original input text")
+    status: str = Field(..., description="Resolution status (e.g., CONFIDENT_KEYWORD, FALLBACK_*)")
+    intent: Optional[Dict[str, Any]] = Field(default=None, description="Raw top intent payload for debug")
+    entities: Optional[Dict[str, Any]] = Field(default=None, description="Extracted entities (product, brand, color, etc.)")
+
+# 2. Create the classification POST endpoint
+@app.post(
+    "/classify",
+    tags=["Intent Classification"],
+    response_model=ClassificationOutput,
+    summary="Classify user input into an intent",
+    responses={
+        200: {
+            "description": "Classification result",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "action_code": "SEARCH_PRODUCT",
+                        "confidence_score": 0.92,
+                        "matched_keywords": ["search", "shoes"],
+                        "original_text": "Show me red Nike running shoes under $100",
+                        "status": "LLM_CLASSIFICATION",
+                        "intent": {
+                            "id": "SEARCH_PRODUCT",
+                            "score": 0.92,
+                            "source": "llm",
+                        },
+                        "entities": {
+                            "product_type": "shoes",
+                            "category": "running",
+                            "brand": "Nike",
+                            "color": "red",
+                            "size": null,
+                            "price_range": {"min": null, "max": 100, "currency": "USD"}
+                        }
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "Classification Failed",
+                        "message": "An internal error occurred while processing the request.",
+                        "detail": "<error details>",
+                    }
+                }
+            },
+        },
+    },
+)
 async def classify_intent(user_input: ClassificationInput) -> ClassificationOutput:
     correlation_id = str(uuid.uuid4())
     print(f"[INFO] [{correlation_id}] Received text: {user_input.text}")
@@ -261,6 +329,7 @@ async def classify_intent(user_input: ClassificationInput) -> ClassificationOutp
             original_text=user_input.text,
             status=str(result.get("status", "UNKNOWN")),
             intent=result.get("intent"),
+            entities=result.get("entities"),  # NEW: Include entities in response
         )
 
     except Exception as e:
@@ -294,6 +363,16 @@ if QUEUE_ROUTER_AVAILABLE:
     except Exception as e:
         print(f"⚠️ Failed to include queue router: {e}")
 
+# Include cache router if available
+if CACHE_ROUTER_AVAILABLE:
+    try:
+        app.include_router(cache_router, prefix="/api/v1")
+    except Exception as e:
+        print(f"⚠️ Failed to include cache router: {e}")
+
+# app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"])
+# app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
+# app.include_router(experiments.router, prefix="/api/v1/experiments", tags=["Experiments"])
 
 # ✅ Global Exception Handler
 @app.exception_handler(Exception)

@@ -2,7 +2,7 @@
 Hybrid Classifier
 Implements weighted scoring algorithm to combine keyword and embedding matching results.
 
-This module implements TASK-5: Hybrid Matching Strategy by blending results from
+This module implements hybrid matching strategy by blending results from
 both keyword and embedding matchers using configurable weights.
 """
 from typing import List, Dict, Any
@@ -13,7 +13,7 @@ class HybridClassifier:
     """
     Blends keyword and embedding matching results using weighted scoring.
     
-    This class implements the core hybrid matching strategy (TASK-5) by:
+    This class implements the core hybrid matching strategy by:
     1. Combining results from both keyword and embedding matchers
     2. Applying configurable weights to each method's scores
     3. Resolving conflicts deterministically
