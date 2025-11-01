@@ -15,6 +15,15 @@ from app.queue.monitor import queue_monitor
 from app.ai.llm_intent.request_handler import RequestHandler
 from app.schemas.llm_intent import LLMIntentRequest
 
+# Import status store (TASK-16)
+try:
+    from app.core.status_store import status_store
+    from app.schemas.request_status import ResultSchema
+    STATUS_STORE_AVAILABLE = True
+except ImportError:
+    status_store = None
+    STATUS_STORE_AVAILABLE = False
+
 # Initialize LLM handler
 try:
     from app.ai.llm_intent.openai_client import OpenAIClient
@@ -49,8 +58,9 @@ def process_message(message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         logger.error("❌ LLM handler not available, cannot process message")
         return None
     
-    query = message.get("query", "")
-    context = message.get("context", {})
+    # Handle both TASK-15 format (user_query) and legacy format (query)
+    query = message.get("user_query") or message.get("query", "")
+    context = message.get("_context") or message.get("context", {})
     
     try:
         # Build LLM request
@@ -118,23 +128,76 @@ def llm_worker(poll_interval: int = 5, max_iterations: Optional[int] = None):
             message = queue_manager.dequeue_ambiguous_query(timeout=poll_interval)
             
             if message:
-                logger.info(f"📨 Processing message: {message['message_id']} | Query: '{message['query']}'")
+                message_id = message.get("message_id", "unknown")
+                logger.info(f"📨 Processing message: {message_id} | Query: '{message.get('query', '')}'")
+                
+                # Update status to PROCESSING (TASK-16)
+                if STATUS_STORE_AVAILABLE and status_store:
+                    try:
+                        status_store.update_status(message_id, "PROCESSING")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to update status to PROCESSING: {e}")
                 
                 # Process message
                 result = process_message(message)
                 
                 if result:
+                    # Apply confidence calibration (TASK-17)
+                    original_confidence = result.get("confidence", 0.0)
+                    calibrated_confidence = original_confidence
+                    
+                    try:
+                        from app.ai.llm_intent.confidence_calibration import get_calibrator
+                        calibrator = get_calibrator()
+                        calibrated_confidence = calibrator.calibrate_confidence(
+                            action_code=result.get("action_code"),
+                            reported_confidence=original_confidence
+                        )
+                        result["confidence"] = calibrated_confidence
+                        if "metadata" not in result:
+                            result["metadata"] = {}
+                        result["metadata"]["original_confidence"] = original_confidence
+                        result["metadata"]["calibrated_confidence"] = calibrated_confidence
+                        
+                        if abs(calibrated_confidence - original_confidence) > 0.05:
+                            logger.info(
+                                f"📊 Calibrated confidence: {original_confidence:.2f} → {calibrated_confidence:.2f} | "
+                                f"action_code={result.get('action_code')}"
+                            )
+                    except Exception as e:
+                        logger.warning(f"⚠️ Confidence calibration failed: {e}")
+                    
+                    # Update status to COMPLETED (TASK-16)
+                    if STATUS_STORE_AVAILABLE and status_store:
+                        try:
+                            result_schema = ResultSchema(
+                                action_code=result.get("action_code"),
+                                confidence=calibrated_confidence,  # Use calibrated confidence
+                                entities=result.get("metadata", {}).get("entities_extracted", {})
+                            )
+                            status_store.complete_request(message_id, result=result_schema)
+                        except Exception as e:
+                            logger.warning(f"⚠️ Failed to update status to COMPLETED: {e}")
+                    
                     # Enqueue result
                     success = queue_manager.enqueue_classification_result(
-                        message_id=message["message_id"],
+                        message_id=message_id,
                         result=result,
                         processing_time=result.get("metadata", {}).get("processing_time_ms", 0) / 1000.0
                     )
                     
                     if not success:
-                        logger.warning(f"⚠️ Failed to enqueue result for {message['message_id']}")
+                        logger.warning(f"⚠️ Failed to enqueue result for {message_id}")
                 else:
-                    # Processing failed, retry or move to DLQ
+                    # Processing failed, update status to FAILED (TASK-16)
+                    if STATUS_STORE_AVAILABLE and status_store:
+                        try:
+                            error = {"type": "LLM_PROCESSING_ERROR", "message": "LLM processing failed"}
+                            status_store.fail_request(message_id, error)
+                        except Exception as e:
+                            logger.warning(f"⚠️ Failed to update status to FAILED: {e}")
+                    
+                    # Retry or move to DLQ
                     if not queue_manager.retry_message(message):
                         queue_manager.move_to_dead_letter_queue(
                             message=message,

@@ -103,16 +103,29 @@ class QueueManager:
             logger.warning("⚠️ Queue unavailable, cannot enqueue message")
             return None
             
-        message_id = f"msg_{int(time.time() * 1000)}"
-        
-        message = {
-            "message_id": message_id,
-            "query": query,
-            "context": context,
-            "timestamp": datetime.utcnow().isoformat(),
-            "retry_count": 0,
-            "priority": priority
-        }
+        # Check if context has a full message (from TASK-15 producer)
+        # This allows preserving the exact TASK-15 message format
+        if "_full_message" in context:
+            full_message = context["_full_message"]
+            message_id = full_message.get("request_id", f"msg_{int(time.time() * 1000)}")
+            # Use the full message format from producer
+            message = full_message
+            # Add internal fields needed by queue_manager
+            message["message_id"] = message_id
+            message["retry_count"] = 0
+            # Store original context separately
+            message["_context"] = {k: v for k, v in context.items() if k != "_full_message"}
+        else:
+            # Legacy format (backward compatibility)
+            message_id = f"msg_{int(time.time() * 1000)}"
+            message = {
+                "message_id": message_id,
+                "query": query,
+                "context": context,
+                "timestamp": datetime.utcnow().isoformat(),
+                "retry_count": 0,
+                "priority": priority
+            }
         
         try:
             # Use sorted set for priority queue

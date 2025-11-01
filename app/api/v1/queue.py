@@ -2,6 +2,7 @@
 Queue Management API Endpoints (CNS-21)
 
 Provides endpoints for monitoring and managing the queue infrastructure.
+Includes status tracking endpoints (TASK-16).
 """
 
 from fastapi import APIRouter, HTTPException
@@ -18,6 +19,14 @@ except ImportError:
     queue_manager = None
     queue_monitor = None
     QUEUE_ENABLED = False
+
+# Import status store (TASK-16)
+try:
+    from app.core.status_store import status_store
+    STATUS_STORE_AVAILABLE = True
+except ImportError:
+    status_store = None
+    STATUS_STORE_AVAILABLE = False
 
 
 @router.get("/health")
@@ -102,5 +111,48 @@ async def clear_queue(queue_name: str) -> Dict[str, Any]:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to clear queue: {str(e)}"
+        )
+
+
+@router.get("/status/{request_id}")
+async def get_request_status(request_id: str) -> Dict[str, Any]:
+    """
+    Get status of a classification request (TASK-16).
+    
+    Returns request status with timestamps and result (if completed).
+    Fast lookup (<10ms p95).
+    """
+    if not STATUS_STORE_AVAILABLE or status_store is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Status store not available"
+        )
+    
+    try:
+        status = status_store.get(request_id)
+        
+        if not status:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Request {request_id} not found. It may have expired or never existed."
+            )
+        
+        # Convert to dict for JSON response
+        status_dict = status.model_dump(mode='json')
+        
+        # Convert datetime to ISO string
+        for field in ['queued_at', 'started_at', 'completed_at']:
+            if status_dict.get(field):
+                if hasattr(status_dict[field], 'isoformat'):
+                    status_dict[field] = status_dict[field].isoformat() + 'Z'
+        
+        return status_dict
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve status: {str(e)}"
         )
 

@@ -92,16 +92,49 @@ def send_to_llm_queue(
 
 def get_classification_result(message_id: str, timeout: int = 30) -> Dict[str, Any]:
     """
-    Get LLM classification result from output queue.
+    Get LLM classification result from status store (TASK-16 integration).
+    
+    Uses status store instead of polling output queue for faster lookups.
     
     Args:
-        message_id: Message ID to wait for
-        timeout: Seconds to wait for result
+        message_id: Request ID to look up
+        timeout: Seconds to wait (not used, status store provides immediate lookup)
     
     Returns:
-        result: LLM classification result or error
+        result: Request status with result if completed, or pending status
     """
-    # This will be implemented when LLM worker is built
-    # For now, just a placeholder
-    logger.info(f"Waiting for result of message: {message_id}")
-    return {"status": "pending", "message_id": message_id}
+    try:
+        from app.core.status_store import status_store
+        
+        if status_store is None:
+            return {"status": "error", "message": "Status store not available"}
+        
+        status = status_store.get(message_id)
+        
+        if not status:
+            return {"status": "not_found", "message_id": message_id}
+        
+        # Return status with result
+        result_dict = {
+            "status": status.status,
+            "request_id": status.request_id,
+            "queued_at": status.queued_at.isoformat() + "Z" if status.queued_at else None,
+            "started_at": status.started_at.isoformat() + "Z" if status.started_at else None,
+            "completed_at": status.completed_at.isoformat() + "Z" if status.completed_at else None,
+        }
+        
+        if status.result:
+            result_dict["result"] = {
+                "action_code": status.result.action_code,
+                "confidence": status.result.confidence,
+                "entities": status.result.entities,
+            }
+        
+        if status.error:
+            result_dict["error"] = status.error
+        
+        return result_dict
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to get classification result: {e}")
+        return {"status": "error", "message": str(e), "message_id": message_id}
