@@ -1,6 +1,4 @@
 """
-<<<<<<< HEAD
-=======
 Defines all supported user intents and example utterances
 for both keyword-based and embedding-based classifiers.
 """

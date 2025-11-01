@@ -42,21 +42,47 @@ logger = logging.getLogger(__name__)
 # Import keyword dictionaries aligned with action codes
 try:
     from .keywords.loader import load_keywords
-    from ..queue_producer import IntentQueueProducer, IntentScore, RuleBasedResult
+    from app.queue.queue_producer import IntentQueueProducer, IntentScore, RuleBasedResult
 except ImportError:
     from keywords.loader import load_keywords
-    from app.ai.queue_producer import IntentQueueProducer, IntentScore, RuleBasedResult
+    from app.queue.queue_producer import IntentQueueProducer, IntentScore, RuleBasedResult
 
 # Initialize queue producer
 _queue_producer = IntentQueueProducer()
 
 # ------------------ CONFIGURATION ------------------
-# Centralize thresholds via app.ai.config
+# Load config from config manager (dynamic) or fallback to static defaults
+
+# --- CONFIG MANAGER INTEGRATION ---
 try:
-    from app.ai.config import UNCLEAR_THRESHOLD, MIN_CONFIDENCE
+    from app.core.config_manager import CONFIG_CACHE, ACTIVE_VARIANT
+    _USE_CONFIG_MANAGER = True
 except Exception:
-    UNCLEAR_THRESHOLD = 0.4
-    MIN_CONFIDENCE = 0.6
+    _USE_CONFIG_MANAGER = False
+
+# Fallback imports (only used if config manager fails)
+# If app/ai/config.py is missing, system should fail (critical error)
+from app.ai.config import UNCLEAR_THRESHOLD as _FALLBACK_UNCLEAR
+from app.ai.config import MIN_CONFIDENCE as _FALLBACK_MIN_CONF
+
+
+def _get_config_value(key: str, fallback: float) -> float:
+    """Load config value from config manager, or use fallback."""
+    if not _USE_CONFIG_MANAGER:
+        return fallback
+    
+    try:
+        rules = CONFIG_CACHE.get("rules", {}).get("rules", {})
+        rule_sets = rules.get("rule_sets", {})
+        current_rules = rule_sets.get(ACTIVE_VARIANT, {})
+        return current_rules.get(key, fallback)
+    except Exception:
+        return fallback
+
+
+# Load config values dynamically
+UNCLEAR_THRESHOLD = _get_config_value("unclear_threshold", _FALLBACK_UNCLEAR)
+MIN_CONFIDENCE = _get_config_value("min_confidence", _FALLBACK_MIN_CONF)
 AMBIGUOUS_THRESHOLD = MIN_CONFIDENCE
 
 # Persist logs as JSON Lines for easy processing

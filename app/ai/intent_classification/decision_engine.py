@@ -100,12 +100,13 @@ class DecisionEngine:
                 raise KeyError("Missing dynamic config")
 
         except Exception as e:
-            print(f"⚠️ Config manager error: {e} — Using fallback defaults.")
+            print(f"⚠️ Config manager error: {e} — Using fallback from app/ai/config.py")
+            # Use centralized fallback values from app/ai/config.py
             self.use_embedding = True
             self.use_keywords = True
-            self.priority_threshold = 0.85
-            self.kw_weight = 0.6
-            self.emb_weight = 0.4
+            self.priority_threshold = PRIORITY_THRESHOLD  # From fallback file
+            self.kw_weight = WEIGHTS["keyword"]           # From fallback file
+            self.emb_weight = WEIGHTS["embedding"]        # From fallback file
             self.hybrid_classifier.update_weights(self.kw_weight, self.emb_weight)
 
     # ------------------------------------------------------------------

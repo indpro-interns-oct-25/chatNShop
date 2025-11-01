@@ -9,12 +9,13 @@
     ]
   },
   "VIEW_REVIEWS": {
-    "priority": 2,
+    "priority": 1,
     "keywords": [
       "view reviews", "see reviews", "check reviews", "read reviews", "review list",
       "product reviews", "customer reviews", "user reviews", "reviews overview", "view feedback",
       "check product reviews", "read product reviews", "reviews page", "see customer feedback", "browse reviews",
-      "review history", "review summary", "reviews for product", "user feedback", "product feedback list"
+      "review history", "review summary", "reviews for product", "user feedback", "product feedback list",
+      "show reviews", "show reviews for", "see reviews for", "check reviews for", "read reviews for"
     ]
   },
   "EDIT_REVIEW": {

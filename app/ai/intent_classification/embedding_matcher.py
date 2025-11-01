@@ -32,24 +32,21 @@ def _soft_normalize(text: str) -> str:
 class EmbeddingMatcher:
     """Embedding-based semantic matcher for user intents."""
 
-    def __init__(self, model_name='all-MiniLM-L6-v2'):
-        print(f"🔄 Loading embedding model '{model_name}'...")
-        start = time.time()
-    def __init__(self, client=None):
+    def __init__(self, model_name='all-MiniLM-L6-v2', client=None):
         """
         EmbeddingMatcher handles semantic similarity searches.
+        :param model_name: Name of the sentence transformer model to use
         :param client: Optional vector database client (e.g., QdrantClient)
         """
-        self.client = client
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.INFO)
-
-    def search(self, query_vector, collection_name="intents", top_k=5):
-        print(f"🔄 Loading model '{model_name}'...")
-        start_time = time.time()
+        print(f"🔄 Loading embedding model '{model_name}'...")
+        start = time.time()
         
         self.model_name = model_name
         self.model = SentenceTransformer(model_name)
+        self.client = client
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
+        
         self.intent_examples = self._load_reference_phrases()
         self.intent_embeddings = self._precompute_embeddings()
         self._query_cache: Dict[str, Any] = {}
@@ -110,11 +107,9 @@ class EmbeddingMatcher:
         return emb
 
     # ------------------------------------------------------------------
-    def search(self, query: str, threshold: float = 0.55) -> List[Dict]:
-        """Performs semantic similarity matching against all intents."""
     def search(self, query: str, threshold: float = 0.60) -> List[Dict]:
         """
-        Perform semantic search using the vector database client.
+        Performs semantic similarity matching against all intents.
         Returns a list of matches with their similarity scores.
         """
         if not self.client:
@@ -176,16 +171,8 @@ class EmbeddingMatcher:
                     print(f"⚠️ Qdrant store failed: {e}")
 
             return results
-
-        try:
-            response = self.client.search(
-                collection_name=collection_name,
-                query_vector=query_vector,
-                limit=top_k
-            )
-            return response
         except Exception as e:
-            print(f"❌ Error during embedding matching: {e}")
+            self.logger.error(f"❌ Error during embedding matching: {e}")
             return [{
                 "id": "SEARCH_PRODUCT",
                 "intent": "SEARCH_PRODUCT",
@@ -193,6 +180,38 @@ class EmbeddingMatcher:
                 "source": "embedding_fallback",
                 "error": str(e),
             }]
+
+    # ------------------------------------------------------------------
+    def match_intent(self, query_vector, collection_name="intents", threshold=0.7):
+        """
+        Finds the best matching intent for a given query vector.
+        :param query_vector: Embedding vector of the query text
+        :param collection_name: Name of the vector collection
+        :param threshold: Minimum similarity score for a valid match
+        :return: Dict with 'intent' and 'score' or None
+        """
+        results = self.search(query_vector, threshold=threshold)
+        if not results:
+            self.logger.warning("No matching results found.")
+            return None
+
+        # Handle both mock and Qdrant response formats
+        best_match = max(results, key=lambda r: r["score"] if isinstance(r, dict) else r.score)
+        score = best_match["score"] if isinstance(best_match, dict) else best_match.score
+        intent = (
+            best_match["payload"]["intent"]
+            if isinstance(best_match, dict) and "payload" in best_match
+            else best_match.get("intent", "unknown")
+        )
+
+        if score >= threshold:
+            return {
+                "intent": intent,
+                "score": round(score, 3)
+            }
+
+        self.logger.info("🟡 No intent exceeded threshold confidence.")
+        return None
 
 
 # ----------------------------------------------------------------------
@@ -236,36 +255,3 @@ if __name__ == "__main__":
             print(f"✅ Top match: {res[0]}")
         else:
             print("⚠️ No match found.")
-            self.logger.error(f"❌ Error during vector search: {e}")
-            return []
-
-    def match_intent(self, query_vector, collection_name="intents", threshold=0.7):
-        """
-        Finds the best matching intent for a given query vector.
-        :param query_vector: Embedding vector of the query text
-        :param collection_name: Name of the vector collection
-        :param threshold: Minimum similarity score for a valid match
-        :return: Dict with 'intent' and 'score' or None
-        """
-        results = self.search(query_vector, collection_name=collection_name, top_k=5)
-        if not results:
-            self.logger.warning("No matching results found.")
-            return None
-
-        # Handle both mock and Qdrant response formats
-        best_match = max(results, key=lambda r: r["score"] if isinstance(r, dict) else r.score)
-        score = best_match["score"] if isinstance(best_match, dict) else best_match.score
-        intent = (
-            best_match["payload"]["intent"]
-            if isinstance(best_match, dict)
-            else best_match.payload.get("intent", "unknown")
-        )
-
-        if score >= threshold:
-            return {
-                "intent": intent,
-                "score": round(score, 3)
-            }
-
-        self.logger.info("🟡 No intent exceeded threshold confidence.")
-        return None

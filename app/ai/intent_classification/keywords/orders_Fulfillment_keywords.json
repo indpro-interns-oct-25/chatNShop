@@ -134,15 +134,6 @@
       "shipping method options", "select delivery option", "available delivery options", "shipping plan", "delivery method choices"
     ]
   },
-  "INITIATE_RETURN": {
-    "priority": 16,
-    "keywords": [
-      "initiate return", "start return process", "return item", "request return", "begin return",
-      "return product", "initiate order return", "return order items", "start refund process", "return purchased item",
-      "return request", "begin refund", "process return", "start return request", "initiate product return",
-      "begin return request", "return order product", "start merchandise return", "initiate refund", "return order now"
-    ]
-  },
   "CANCEL_RETURN": {
     "priority": 17,
     "keywords": [

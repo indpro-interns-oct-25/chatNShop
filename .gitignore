@@ -220,3 +220,21 @@ config/versions/*.json
 
 logs/
 logs/*.jsonl
+
+# Runtime/generated data files
+data/*.db
+data/*.json
+data/
+
+# Redis persistence
+redis_data/
+
+# Test result files
+Results/
+Results/*.csv
+Results/*.json
+
+# A/B testing runtime event logs
+app/core/ab_testing/*.csv
+app/core/ab_testing/*.jsonl
+app/core/ab_testing/bandit_state.json

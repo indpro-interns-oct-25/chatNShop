@@ -1,17 +1,3 @@
-<<<<<<< HEAD
-=======
-import os
-import json
-import logging
-from typing import Dict, Any, List
-from app.ai.intent_classification.keywords.loader import load_all_keywords
-from app.utils.text_processing import normalize_text
-
-logger = logging.getLogger(__name__)
-
-KEYWORDS_DIR = os.path.join(os.path.dirname(__file__), "keywords")
->>>>>>> 6bdce236d75757b4a514e17eac9ad00d1d7ea989
-# app/ai/intent_classification/keyword_matcher.py
 """
 KeywordMatcher - robust, test-friendly keyword matching for intent classification.
 
@@ -25,12 +11,20 @@ Behavior:
 """
 
 from __future__ import annotations
+
 import os
+import json
 import re
 import time
-import json
+import logging
 from functools import lru_cache
 from typing import Dict, List, Tuple, Any, Optional, Union
+
+from app.ai.intent_classification.keywords.loader import load_all_keywords
+from app.utils.text_processing import normalize_text
+
+logger = logging.getLogger(__name__)
+KEYWORDS_DIR = os.path.join(os.path.dirname(__file__), "keywords")
 
 # -----------------------
 # Try to import project utilities (safe fallbacks if not present)
@@ -75,35 +69,57 @@ def _normalize_text_local(text: str) -> str:
     return s
 
 class KeywordMatcher:
+    """
+    Production-ready keyword matcher that uses the precompiled matching system.
+    Compatible with DecisionEngine's expected interface.
+    """
     def __init__(self):
-        self.keywords = load_all_keywords(KEYWORDS_DIR)
-        logger.info("✅ KeywordMatcher initialized and keywords loaded.")
+        """Initialize by ensuring keywords are precompiled."""
+        _precompile_keywords()
+        logger.info(f"✅ KeywordMatcher initialized with {len(_PRECOMPILED)} intents.")
+        
+        # Log sample for verification
+        if _PRECOMPILED:
+            sample_intent = list(_PRECOMPILED.keys())[0]
+            sample_data = _PRECOMPILED[sample_intent]
+            logger.debug(f"Sample intent '{sample_intent}': {len(sample_data.get('phrases', []))} phrases")
+
+    def search(self, query: str, top_n: int = 5) -> List[Dict[str, Any]]:
+        """
+        Search for matching intents using keyword matching.
+        Returns list of dicts compatible with DecisionEngine's expected format.
+        
+        Args:
+            query: User input text
+            top_n: Maximum number of results to return
+            
+        Returns:
+            List of dicts with keys: id, intent, action, score, source, match_type, matched_text
+        """
+        results = match_keywords(query, top_n=top_n)
+        
+        if results:
+            logger.info(f"✅ Keyword match: {results[0]['id']} (score={results[0]['score']:.3f})")
+        else:
+            logger.warning(f"⚠️  No keyword match for: '{query}'")
+            
+        return results
 
     def match(self, text: str) -> Dict[str, Any]:
         """
-        Match input text against known intent keywords.
-        Returns structured result instead of raw list.
+        Legacy method for backward compatibility.
+        Returns single best match in simplified format.
         """
-        text = normalize_text(text)
-        matches: List[Dict[str, Any]] = []
-
-        for intent, kw_list in self.keywords.items():
-            for kw in kw_list:
-                if kw in text:
-                    matches.append({
-                        "intent": intent,
-                        "keyword": kw,
-                        "confidence": 0.9
-                    })
-
-        # ✅ If matches found → return the best one
-        if matches:
-            best_match = max(matches, key=lambda x: x["confidence"])
-            logger.info(f"✅ Keyword match found: {best_match}")
-            return best_match
-
-        # ⚠️ No match
-        logger.warning("⚠️ No keyword match found.")
+        results = self.search(text, top_n=1)
+        if results:
+            best = results[0]
+            return {
+                "intent": best["id"],
+                "keyword": best.get("matched_text", ""),
+                "confidence": best["score"]
+            }
+        
+        logger.warning(f"⚠️  No keyword match found for: '{text}'")
         return {"intent": "UNKNOWN", "confidence": 0.0, "keyword": None}
 
 def normalize_text(text: str) -> str:
@@ -374,22 +390,12 @@ def match_keywords(
     # Note: previously logged latency; logging removed as requested.
     return results
 
-# -----------------------
-# KeywordMatcher class (DecisionEngine compatibility)
-# -----------------------
-class KeywordMatcher:
-    def __init__(self):
-        _precompile_keywords()
-
-    def search(self, query: str) -> List[Dict[str, Any]]:
-        # DecisionEngine expects a list of dicts with id,intent,score,source,match_type,matched_text
-        return match_keywords(query, top_n=3)
+# NOTE: KeywordMatcher class is now defined earlier in the file (around line 71)
+# This duplicate definition has been removed to avoid conflicts
 
 
 # If run as script, perform a quick self-test
 if __name__ == "__main__":
-<<<<<<< HEAD
-=======
     matcher = KeywordMatcher()
     sample_queries = [
         "show me red nike shoes",
@@ -401,8 +407,7 @@ if __name__ == "__main__":
 
     for q in sample_queries:
         print(f"\n🧾 Query: {q}")
-        print("Result:", matcher.match(q))
->>>>>>> 6bdce236d75757b4a514e17eac9ad00d1d7ea989
+        print("Result:", matcher.search(q))
     # Manual test
     matcher = KeywordMatcher()
     print(matcher.search("add@@to#cart$"))

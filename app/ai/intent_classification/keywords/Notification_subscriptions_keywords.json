@@ -54,12 +54,13 @@
     ]
   },
   "SUBSCRIBE_PRODUCT": {
-    "priority": 7,
+    "priority": 1,
     "keywords": [
       "subscribe product", "product subscription", "get updates for product", "notify me about product", "product alert subscribe",
       "subscribe for product updates", "product notifications", "follow product", "track product updates", "enable product alerts",
       "product subscription alerts", "product notifications subscription", "subscribe product news", "product updates subscription", "receive product alerts",
-      "product push notifications", "product tracking subscribe", "subscribe product info", "product messages subscription", "product alert opt-in"
+      "product push notifications", "product tracking subscribe", "subscribe product info", "product messages subscription", "product alert opt-in",
+      "notify me when", "notify when", "alert me when", "back in stock", "in stock", "stock notification", "restock alert", "availability alert"
     ]
   },
   "UNSUBSCRIBE_PRODUCT": {

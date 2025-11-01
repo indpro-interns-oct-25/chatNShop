@@ -9,7 +9,7 @@ import random
 import uuid
 import time
 import argparse
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pathlib import Path
 from openai import OpenAI
 
@@ -119,7 +119,7 @@ def run_simulation(user_input: str, user_id: int, label: str):
     model_name = VARIANTS[variant]["model"]
 
     request_id = str(uuid.uuid4())
-    ts_utc = datetime.now(UTC).isoformat()
+    ts_utc = datetime.now(timezone.utc).isoformat()
 
     response_text, latency_ms, cost_usd, prompt_tokens, completion_tokens = run_llm_inference(
         user_input, model_name

@@ -27,12 +27,13 @@
     ]
   },
   "VIEW_CART": {
-    "priority": 4,
+    "priority": 1,
     "keywords": [
       "view cart", "show cart", "my cart", "checkout cart", "open cart",
       "display cart", "see cart items", "look at cart", "cart overview", "cart page",
       "check cart", "view shopping cart", "inspect cart", "cart contents", "cart items list",
-      "cart summary", "review cart", "browse cart", "cart view", "show shopping cart"
+      "cart summary", "review cart", "browse cart", "cart view", "show shopping cart",
+      "show my cart", "view my cart", "see my cart", "check my cart", "open my cart"
     ]
   },
   "EMPTY_CART": {

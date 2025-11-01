@@ -1,6 +1,16 @@
 {
-  "VIEW_RETURN_POLICY": {
+  "INITIATE_RETURN": {
     "priority": 1,
+    "keywords": [
+      "initiate return", "start return", "begin return", "return product", "return item",
+      "return request", "request return", "return order", "return this", "want to return",
+      "need to return", "return process", "return initiation", "start return process", "begin return process",
+      "create return", "make return", "process return", "return submission", "initiate return request",
+      "i want to return", "i need to return", "i would like to return", "return this product", "return this item"
+    ]
+  },
+  "VIEW_RETURN_POLICY": {
+    "priority": 2,
     "keywords": [
       "view return policy", "check return policy", "see return rules", "browse return policy", "return guidelines",
       "return instructions", "return regulations", "view refund policy", "return conditions", "policy for returns",

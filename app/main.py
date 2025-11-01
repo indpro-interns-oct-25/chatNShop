@@ -1,22 +1,20 @@
 """
 Intent Classification API - Main Application Entry Point
 """
-import sys
 import os
-import time  # For Qdrant retry logic
 import time
 import uuid
 import traceback
 from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional, List
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from typing import Any, Dict, Optional, List
-from datetime import datetime
+import uvicorn
 
 # Routers
 from app.status_api import router as status_router
@@ -26,11 +24,15 @@ from app.api.ab_testing_api import router as ab_testing_router
 from app.api.testing_framework_api import router as testing_framework_router
 from app.ai.cost_monitor.scheduler import start_scheduler
 
-# Decision Engine Import
-import uvicorn
+# Qdrant client setup
+from qdrant_client import QdrantClient, models
 
-# ✅ Structured logging with correlation ID and error context
-def log_with_context(level: str, message: str, error: Exception | None = None, context: Optional[str] = None):
+# Load environment variables
+load_dotenv()
+
+
+# Structured logging with correlation ID and error context
+def log_with_context(level: str, message: str, error: Exception | None = None, context: str | None = None):
     correlation_id = str(uuid.uuid4())
     base_log = f"[{level}] [{correlation_id}] {message}"
     if error:
@@ -41,37 +43,32 @@ def log_with_context(level: str, message: str, error: Exception | None = None, c
     return correlation_id
 
 
-# ✅ Import resilient OpenAI client
+# Import resilient OpenAI client
 try:
     from app.core.resilient_openai_client import resilient_client
 except Exception:
     resilient_client = None
 
-# ✅ Import decision engine and routers
+# Import decision engine and routers
 print("Attempting to import Decision Engine...")
 from app.ai.intent_classification.decision_engine import get_intent_classification
 from app.api.v1.intent import router as intent_router
+
 try:
     from app.api.v1.queue import router as queue_router
     QUEUE_ROUTER_AVAILABLE = True
 except ImportError:
     QUEUE_ROUTER_AVAILABLE = False
+
 try:
     from app.api.v1.cache import router as cache_router
     CACHE_ROUTER_AVAILABLE = True
 except ImportError:
     CACHE_ROUTER_AVAILABLE = False
+
 print("Successfully imported Decision Engine.")
 
-# ✅ Qdrant client setup
-from qdrant_client import QdrantClient, models
-
-# ✅ Load environment variables
-load_dotenv()
-
-# --- Queue Infrastructure Import (CNS-21) ---
-# ✅ Queue Infrastructure Import (CNS-21)
-# --- Queue Infrastructure Import ---
+# Queue Infrastructure Import
 try:
     from app.queue.queue_manager import queue_manager
     from app.queue.monitor import queue_monitor
@@ -81,31 +78,20 @@ except Exception as e:
     queue_manager = None
     queue_monitor = None
     QUEUE_AVAILABLE = False
-# --- End Queue Infrastructure Import ---
 
-# --- Qdrant Configuration ---
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
-QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")  # optional auth
-PRODUCT_COLLECTION_NAME = "chatnshop_products"
-VECTOR_SIZE = 384  # Must match embedding model
-# --- End Qdrant Configuration ---
-
-# --- Initialize Qdrant Client with Retry Logic ---
-QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
-QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
-# Use QDRANT_URL if set, otherwise construct from host/port
-
-# ✅ Qdrant Configuration
+# Qdrant Configuration
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 PRODUCT_COLLECTION_NAME = "chatnshop_products"
-VECTOR_SIZE = 384  # must match embedding model
+VECTOR_SIZE = 384  # Must match embedding model
 QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 
+# Use QDRANT_URL if set, otherwise construct from host/port
 if not QDRANT_URL or QDRANT_URL == "http://localhost:6333":
     QDRANT_URL = f"http://{QDRANT_HOST}:{QDRANT_PORT}"
 
+# Initialize Qdrant Client with Retry Logic
 print(f"Attempting to connect to Qdrant at {QDRANT_URL}...")
 qdrant_client = None
 retries = 5
@@ -113,46 +99,29 @@ wait_time = 3
 
 for i in range(retries):
     try:
-        client = QdrantClient(QDRANT_URL, timeout=10)
-        client.get_collections()
-        qdrant_client = client
         if QDRANT_API_KEY:
-            qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+            qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=10)
         else:
-            qdrant_client = QdrantClient(url=QDRANT_URL)
+            qdrant_client = QdrantClient(url=QDRANT_URL, timeout=10)
         qdrant_client.get_collections()
         print(f"✅ Connected to Qdrant at {QDRANT_URL}")
         break
     except Exception as e:
-        print(f"Attempt {i + 1} failed: Could not connect to Qdrant.")
-        print(f"   Error detail: {e}")
         print(f"Attempt {i + 1} failed: Could not connect to Qdrant. Error: {e}")
         if i < retries - 1:
             print(f"Retrying in {wait_time} seconds...")
             time.sleep(wait_time)
         else:
             print(f"❌ FAILED to initialize Qdrant client after {retries} attempts.")
-# --- End Qdrant Client Initialization ---
-            print("❌ FAILED to initialize Qdrant client after 5 attempts.")
 
 
-# ✅ Lifespan hook (app startup/shutdown)
+# Lifespan hook (app startup/shutdown)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown manager."""
     print("🚀 Starting Intent Classification API...")
 
-    # --- Initialize Queue Infrastructure (CNS-21) ---
-    print("🚀 Starting Intent Classification API...")
-
-    # Queue initialization
-    """
-    Application lifespan context manager.
-    Handles startup and shutdown events.
-    """
-    print(" Starting Intent Classification API...")
-    
-    # --- Initialize Queue Infrastructure ---
+    # Initialize Queue Infrastructure
     if QUEUE_AVAILABLE and queue_manager:
         try:
             if queue_manager.health_check():
@@ -164,8 +133,7 @@ async def lifespan(app: FastAPI):
     else:
         print("⚠️ Queue infrastructure not available (continuing without async processing)")
 
-    # --- Model Warmup ---
-    # Warm up Decision Engine (load models)
+    # Model Warmup - Warm up Decision Engine (load models)
     try:
         get_intent_classification("warm up")
         print("✅ Models loaded and Decision Engine is warm.")
@@ -186,33 +154,26 @@ async def lifespan(app: FastAPI):
                 print(f"ℹ️ Qdrant collection '{PRODUCT_COLLECTION_NAME}' already exists.")
             else:
                 print(f"❌ Could not create/verify Qdrant collection: {e}")
+                log_with_context("ERROR", "Could not create/verify Qdrant collection", e)
     else:
         print("⚠️ Qdrant client not initialized, skipping collection creation.")
 
-    # --- Initialize Cost Monitoring Scheduler ---
+    # Initialize Cost Monitoring Scheduler
     try:
         start_scheduler()
         print("✅ Cost monitoring scheduler initialized.")
     except Exception as e:
         print(f"⚠️ Scheduler init failed: {e}")
 
+    print("✅ Intent Classification API started successfully!")
+    
     yield
+    
     print("🛑 Shutting down Intent Classification API...")
     print("✅ Shutdown complete.")
 
 
-# --- FastAPI App Initialization ---
-                log_with_context("ERROR", "Could not create/verify Qdrant collection", e)
-    else:
-        print("⚠️ Qdrant client not initialized, skipping collection creation.")
-
-    print("✅ Intent Classification API started successfully!")
-    yield
-    print("🛑 Shutting down Intent Classification API...")
-    print("✅ Intent Classification API shut down successfully!")
-
-
-# ✅ FastAPI app setup
+# FastAPI app setup
 app = FastAPI(
     title=os.getenv("APP_NAME", "Intent Classification API"),
     version=os.getenv("APP_VERSION", "1.0.0"),
@@ -222,8 +183,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# --- CORS ---
-# ✅ Middleware
+# Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(","),
@@ -232,9 +192,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Health Endpoints ---
 
-# ✅ Root Endpoint
+# Root Endpoint
 @app.get("/", tags=["Health"])
 async def root() -> Dict[str, Any]:
     return {
@@ -245,7 +204,7 @@ async def root() -> Dict[str, Any]:
     }
 
 
-# ✅ Health Endpoint
+# Health Endpoint
 @app.get("/health", tags=["Health"])
 async def health_check() -> Dict[str, Any]:
     qdrant_status = "disconnected"
@@ -268,8 +227,6 @@ async def health_check() -> Dict[str, Any]:
         except Exception as e:
             redis_status = f"error: {str(e)}"
 
-    openai_status = "configured" if os.getenv("OPENAI_API_KEY") else "not_configured"
-    overall_status = "healthy" if qdrant_status == "connected" and "connected" in redis_status else "degraded"
     openai_status = "not_configured"
     try:
         api_key = os.getenv("OPENAI_API_KEY")
@@ -293,44 +250,14 @@ async def health_check() -> Dict[str, Any]:
         "version": os.getenv("APP_VERSION", "1.0.0")
     }
 
-# --- Intent Classification Endpoint ---
-class ClassificationInput(BaseModel):
-    text: str
 
-class ClassificationOutput(BaseModel):
-    action_code: str
-    confidence_score: float
-    matched_keywords: List[str]
-    original_text: str
-    status: str
-    intent: Optional[Dict[str, Any]] = None
-
-@app.post("/classify", tags=["Intent Classification"], response_model=ClassificationOutput)
-async def classify_intent(user_input: ClassificationInput) -> ClassificationOutput:
-    try:
-        result = get_intent_classification(user_input.text)
-        top = result.get("intent", {}) if isinstance(result, dict) else {}
-        result["original_text"] = user_input.text
-        return ClassificationOutput(
-            action_code=top.get("id", "UNKNOWN_INTENT"),
-            confidence_score=float(top.get("score", 0.0)),
-            matched_keywords=[top.get("matched_text")] if top.get("matched_text") else [],
-
-# ✅ Classification Endpoint
+# Classification Models
 class ClassificationInput(BaseModel):
     text: str
 
 
 class ClassificationOutput(BaseModel):
     action_code: str = Field(..., description="Resolved action code")
-    confidence_score: float = Field(..., ge=0.0, le=1.0)
-    matched_keywords: List[str] = Field(default_factory=list)
-    original_text: str = Field(...)
-    status: str = Field(...)
-    intent: Optional[Dict[str, Any]] = Field(default=None)
-
-
-@app.post("/classify", tags=["Intent Classification"], response_model=ClassificationOutput)
     confidence_score: float = Field(..., ge=0.0, le=1.0, description="Confidence (0-1)")
     matched_keywords: List[str] = Field(default_factory=list, description="Matched keyword phrases")
     original_text: str = Field(..., description="Original input text")
@@ -338,7 +265,8 @@ class ClassificationOutput(BaseModel):
     intent: Optional[Dict[str, Any]] = Field(default=None, description="Raw top intent payload for debug")
     entities: Optional[Dict[str, Any]] = Field(default=None, description="Extracted entities (product, brand, color, etc.)")
 
-# 2. Create the classification POST endpoint
+
+# Classification Endpoint
 @app.post(
     "/classify",
     tags=["Intent Classification"],
@@ -365,8 +293,8 @@ class ClassificationOutput(BaseModel):
                             "category": "running",
                             "brand": "Nike",
                             "color": "red",
-                            "size": null,
-                            "price_range": {"min": null, "max": 100, "currency": "USD"}
+                            "size": None,
+                            "price_range": {"min": None, "max": 100, "currency": "USD"}
                         }
                     }
                 }
@@ -410,30 +338,9 @@ async def classify_intent(user_input: ClassificationInput) -> ClassificationOutp
             original_text=user_input.text,
             status=result.get("status", "UNKNOWN"),
             intent=result.get("intent"),
-            entities=result.get("entities"),  # NEW: Include entities in response
+            entities=result.get("entities"),
         )
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": "Classification Failed", "detail": str(e)})
-
-# --- Include Routers ---
-app.include_router(intent_router)
-app.include_router(status_router)
-app.include_router(cost_dashboard_router)
-app.include_router(cost_dashboard_ui_router)
-app.include_router(ab_testing_router)
-app.include_router(testing_framework_router)
-
-if QUEUE_ROUTER_AVAILABLE:
-    app.include_router(queue_router, prefix="/api/v1")
-
-# --- Exception Handler ---
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(status_code=500, content={"error": "Internal server error", "path": str(request.url)})
-
-# --- Run Server ---
-def run():
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=False)
         error_id = log_with_context("ERROR", "Classification failed", e, context=user_input.text)
         if resilient_client:
             fallback = resilient_client.call(user_input.text)
@@ -456,26 +363,28 @@ def run():
         )
 
 
-# ✅ Include routers
+# Include routers
 app.include_router(intent_router)
+app.include_router(status_router)
+app.include_router(cost_dashboard_router)
+app.include_router(cost_dashboard_ui_router)
+app.include_router(ab_testing_router)
+app.include_router(testing_framework_router)
+
 if QUEUE_ROUTER_AVAILABLE:
     try:
         app.include_router(queue_router, prefix="/api/v1")
     except Exception as e:
         print(f"⚠️ Failed to include queue router: {e}")
 
-# Include cache router if available
 if CACHE_ROUTER_AVAILABLE:
     try:
         app.include_router(cache_router, prefix="/api/v1")
     except Exception as e:
         print(f"⚠️ Failed to include cache router: {e}")
 
-# app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"])
-# app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
-# app.include_router(experiments.router, prefix="/api/v1/experiments", tags=["Experiments"])
 
-# ✅ Global Exception Handler
+# Global Exception Handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     error_id = log_with_context("ERROR", f"Unhandled exception at {request.url}", exc)
@@ -490,7 +399,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# ✅ Entrypoint
+# Entrypoint
 def run():
     uvicorn.run(
         "app.main:app",

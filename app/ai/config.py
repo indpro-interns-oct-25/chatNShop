@@ -1,36 +1,41 @@
 """
-Configuration File for the AI Module
+⚠️  FALLBACK CONFIGURATION ONLY ⚠️
 
-This file stores all the settings, weights, and thresholds needed by
-the intent classification models.
+This file provides SAFE DEFAULT values that are ONLY used when:
+- Config Manager fails to load config/rules.json
+- Running in emergency/degraded mode
+- Config Manager is not available
+
+🎯 PRIMARY CONFIG SOURCE: config/rules.json (via config_manager)
+   ↳ Supports hot-reload, A/B testing, and dynamic updates
+
+DO NOT modify this file for production configuration changes.
+Instead, update config/rules.json.
 """
 
-# --- Keyword Matcher Settings ---
+# ==============================================================================
+# FALLBACK DEFAULTS - Only used when config manager fails
+# ==============================================================================
 
-# If a keyword match has a score >= this value, we'll return it
-# immediately and skip the (slower) embedding search.
-# Lowered from 0.95 to 0.80 for better coverage
-PRIORITY_THRESHOLD = 0.80
-
-
-# --- Hybrid Blending Weights ---
-
-# Defines how to combine the scores from the two different matchers.
-# These should ideally add up to 1.0, but it's not strictly required.
+# --- Hybrid Classifier Weights ---
+# How to blend keyword vs embedding scores
+PRIORITY_THRESHOLD = 0.80  # Skip embeddings if keyword score >= this
 WEIGHTS = {
-    "keyword": 0.6,    # Give more weight to explicit keywords
-    "embedding": 0.4   # Give less weight to semantic "guesses"
+    "keyword": 0.6,      # Weight for keyword matcher
+    "embedding": 0.4     # Weight for embedding matcher
 }
 
+# --- Confidence Thresholds ---
+# Used by confidence_threshold.py to determine if result is confident
+MIN_ABSOLUTE_CONFIDENCE = 0.30   # Minimum score for any result
+MIN_DIFFERENCE_THRESHOLD = 0.05  # Minimum gap between top 2 results
 
-# --- Confidence Thresholds (for confidence_threshold.py) ---
+# --- Ambiguity Resolution ---
+# Used by ambiguity_resolver.py for unclear/ambiguous intent handling
+UNCLEAR_THRESHOLD = 0.40  # Below this = unclear intent
+MIN_CONFIDENCE = 0.60     # Above this = valid intent
 
-# The absolute minimum score required for any result to be considered valid.
-# Lowered to 0.30 for maximum coverage
-MIN_ABSOLUTE_CONFIDENCE = 0.30
-
-# The minimum required score difference between the top two results
-# to consider the top result unambiguous. If the gap is smaller than this,
-# the result is "AMBIGUOUS".
-# Lowered from 0.10 to 0.05 for better tolerance
-MIN_DIFFERENCE_THRESHOLD = 0.05
+# ==============================================================================
+# ⚠️  REMINDER: These are FALLBACK values only!
+# For production config, update: config/rules.json
+# ==============================================================================

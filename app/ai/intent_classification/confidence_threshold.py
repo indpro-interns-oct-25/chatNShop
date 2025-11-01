@@ -1,10 +1,29 @@
 from typing import List, Dict, Any, Tuple
 
-# --- THIS IS THE FIX ---
-# Import the configuration from your central config file
-# instead of hard-coding it here.
-from app.ai.config import MIN_ABSOLUTE_CONFIDENCE, MIN_DIFFERENCE_THRESHOLD
-# --- END FIX ---
+# --- CONFIG MANAGER INTEGRATION ---
+try:
+    from app.core.config_manager import CONFIG_CACHE, ACTIVE_VARIANT
+    _USE_CONFIG_MANAGER = True
+except Exception:
+    _USE_CONFIG_MANAGER = False
+
+# Fallback imports (only used if config manager fails)
+from app.ai.config import MIN_ABSOLUTE_CONFIDENCE as _FALLBACK_MIN_ABS
+from app.ai.config import MIN_DIFFERENCE_THRESHOLD as _FALLBACK_MIN_DIFF
+
+
+def _get_config_value(key: str, fallback: float) -> float:
+    """Load config value from config manager, or use fallback."""
+    if not _USE_CONFIG_MANAGER:
+        return fallback
+    
+    try:
+        rules = CONFIG_CACHE.get("rules", {}).get("rules", {})
+        rule_sets = rules.get("rule_sets", {})
+        current_rules = rule_sets.get(ACTIVE_VARIANT, {})
+        return current_rules.get(key, fallback)
+    except Exception:
+        return fallback
 
 
 def is_confident(results: List[Dict[str, Any]]) -> Tuple[bool, str]:
@@ -25,6 +44,10 @@ def is_confident(results: List[Dict[str, Any]]) -> Tuple[bool, str]:
         - A boolean indicating if the result is confident (True) or not (False).
         - A string reason for the outcome (e.g., "CONFIDENT", "AMBIGUOUS", "BELOW_THRESHOLD").
     """
+    # Load config values dynamically
+    MIN_ABSOLUTE_CONFIDENCE = _get_config_value("min_absolute_confidence", _FALLBACK_MIN_ABS)
+    MIN_DIFFERENCE_THRESHOLD = _get_config_value("min_difference_threshold", _FALLBACK_MIN_DIFF)
+    
     # Case 1: No results were found.
     if not results:
         return False, "NO_RESULTS"
