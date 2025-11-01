@@ -14,6 +14,7 @@ from .response_parser import LLMIntentResponse as ParsedLLMResponse, parse_llm_r
 from .prompt_loader import PromptLoader, PromptLoadError, get_prompt_loader
 from .context_collector import get_context_collector
 from .context_summarizer import get_context_summarizer
+from .response_cache import get_response_cache
 import logging
 import os
 
@@ -52,6 +53,9 @@ class RequestHandler:
         # Get token limit from environment or use default
         context_token_limit = int(os.getenv("CONTEXT_TOKEN_LIMIT", "2000"))
         self.context_summarizer = get_context_summarizer(max_tokens=context_token_limit)
+        
+        # Initialize response cache
+        self.response_cache = get_response_cache()
         
         # Configuration
         self.enable_context = os.getenv("ENABLE_SESSION_CONTEXT", "true").lower() == "true"
@@ -141,6 +145,21 @@ class RequestHandler:
         if self.client is None:
             return self._simulate_llm_response(payload)
 
+        # Check cache first if enabled
+        if self.response_cache.enabled:
+            cached_response = self.response_cache.get(
+                query=payload.user_input,
+                context=payload.metadata if hasattr(payload, 'metadata') else None
+            )
+            if cached_response:
+                logger.info(f"✅ Using cached LLM response for query: '{payload.user_input[:50]}...'")
+                # Add cache indicator to metadata
+                if isinstance(cached_response, dict):
+                    cached_response = cached_response.copy()
+                    cached_response['_from_cache'] = True
+                return cached_response
+
+        # Cache miss - call LLM API
         request_body = {
             "messages": self.build_messages(payload),
             "temperature": opts.get("temperature", getattr(self.client, "temperature", 0.3)),
@@ -158,7 +177,7 @@ class RequestHandler:
         # Extract the actual response text/content
         if "response" in result:
             # OpenAI client returns {"response": "...", "latency_ms": ..., "usage": ...}
-            return {
+            llm_response = {
                 "intent": None,  # Will be parsed
                 "intent_category": None,
                 "action_code": None,
@@ -169,7 +188,7 @@ class RequestHandler:
             }
         else:
             # Fallback: assume result is the response directly
-            return {
+            llm_response = {
                 "intent": None,
                 "intent_category": None,
                 "action_code": None,
@@ -178,6 +197,16 @@ class RequestHandler:
                 "reasoning": None,
                 "raw_response": result if isinstance(result, str) else str(result),
             }
+        
+        # Cache the response if enabled
+        if self.response_cache.enabled:
+            self.response_cache.set(
+                query=payload.user_input,
+                response=llm_response,
+                context=payload.metadata if hasattr(payload, 'metadata') else None
+            )
+        
+        return llm_response
 
     def _simulate_llm_response(self, payload: LLMIntentRequest) -> Dict[str, Any]:
         """Generate a deterministic stand-in response when no LLM is wired up."""

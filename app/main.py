@@ -26,6 +26,11 @@ try:
     QUEUE_ROUTER_AVAILABLE = True
 except ImportError:
     QUEUE_ROUTER_AVAILABLE = False
+try:
+    from app.api.v1.cache import router as cache_router
+    CACHE_ROUTER_AVAILABLE = True
+except ImportError:
+    CACHE_ROUTER_AVAILABLE = False
 print("Successfully imported Decision Engine.")
 
 # --- Qdrant Client Import ---
@@ -362,6 +367,13 @@ if QUEUE_ROUTER_AVAILABLE:
         app.include_router(queue_router, prefix="/api/v1")
     except Exception as e:
         print(f"⚠️ Failed to include queue router: {e}")
+
+# Include cache router if available
+if CACHE_ROUTER_AVAILABLE:
+    try:
+        app.include_router(cache_router, prefix="/api/v1")
+    except Exception as e:
+        print(f"⚠️ Failed to include cache router: {e}")
 
 # app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"])
 # app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
