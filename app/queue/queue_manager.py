@@ -25,8 +25,17 @@ class QueueManager:
     3. Failed messages → DEAD_LETTER_QUEUE
     """
     
-    def __init__(self):
-        """Initialize Redis connection with connection pooling"""
+    def __init__(self, fail_silently: bool = False):
+        """
+        Initialize Redis connection with connection pooling.
+        
+        Args:
+            fail_silently: If True, don't raise exception on connection failure (for graceful degradation)
+        """
+        self.redis_client = None
+        self.pool = None
+        self._is_available = False
+        
         try:
             # Connection pool for better performance
             self.pool = redis.ConnectionPool(
@@ -44,21 +53,41 @@ class QueueManager:
             
             # Test connection
             self.redis_client.ping()
+            self._is_available = True
             logger.info("✅ Queue Manager initialized successfully")
             
         except redis.ConnectionError as e:
-            logger.error(f"❌ Failed to connect to Redis: {e}")
-            raise
+            self._is_available = False
+            if fail_silently:
+                logger.warning(f"⚠️ Redis not available: {e}. Queue operations will be disabled.")
+            else:
+                logger.error(f"❌ Failed to connect to Redis: {e}")
+                raise
         except Exception as e:
-            logger.error(f"❌ Queue Manager initialization failed: {e}")
-            raise
+            self._is_available = False
+            if fail_silently:
+                logger.warning(f"⚠️ Queue Manager initialization failed: {e}. Queue operations will be disabled.")
+            else:
+                logger.error(f"❌ Queue Manager initialization failed: {e}")
+                raise
+    
+    def is_available(self) -> bool:
+        """Check if queue is available."""
+        if not self._is_available or self.redis_client is None:
+            return False
+        try:
+            self.redis_client.ping()
+            return True
+        except Exception:
+            self._is_available = False
+            return False
     
     def enqueue_ambiguous_query(
         self, 
         query: str, 
         context: Dict[str, Any],
         priority: int = queue_config.PRIORITY_NORMAL
-    ) -> str:
+    ) -> Optional[str]:
         """
         Add ambiguous query to input queue for LLM processing.
         
@@ -68,8 +97,12 @@ class QueueManager:
             priority: Queue priority (1=high, 5=normal, 10=low)
         
         Returns:
-            message_id: Unique message identifier
+            message_id: Unique message identifier, or None if queue unavailable
         """
+        if not self.is_available():
+            logger.warning("⚠️ Queue unavailable, cannot enqueue message")
+            return None
+            
         message_id = f"msg_{int(time.time() * 1000)}"
         
         message = {
@@ -106,7 +139,8 @@ class QueueManager:
             
         except Exception as e:
             logger.error(f"❌ Failed to enqueue message {message_id}: {e}")
-            raise
+            self._is_available = False  # Mark as unavailable
+            return None
     
     def dequeue_ambiguous_query(self, timeout: int = 0) -> Optional[Dict[str, Any]]:
         """
@@ -118,6 +152,9 @@ class QueueManager:
         Returns:
             message: Query message dict or None
         """
+        if not self.is_available():
+            return None
+            
         try:
             if queue_config.ENABLE_PRIORITY_QUEUE:
                 # Get highest priority (lowest score) message
@@ -163,7 +200,7 @@ class QueueManager:
         message_id: str,
         result: Dict[str, Any],
         processing_time: float
-    ) -> None:
+    ) -> bool:
         """
         Add classification result to output queue.
         
@@ -171,7 +208,14 @@ class QueueManager:
             message_id: Original message ID
             result: LLM classification result
             processing_time: Processing time in seconds
+        
+        Returns:
+            bool: True if successful, False if queue unavailable
         """
+        if not self.is_available():
+            logger.warning(f"⚠️ Queue unavailable, cannot enqueue result for {message_id}")
+            return False
+            
         output_message = {
             "message_id": message_id,
             "result": result,
@@ -192,23 +236,32 @@ class QueueManager:
             )
             
             logger.info(f"✅ Enqueued result for message: {message_id}")
+            return True
             
         except Exception as e:
             logger.error(f"❌ Failed to enqueue result for {message_id}: {e}")
-            raise
+            self._is_available = False
+            return False
     
     def move_to_dead_letter_queue(
         self,
         message: Dict[str, Any],
         error: str
-    ) -> None:
+    ) -> bool:
         """
         Move failed message to dead letter queue.
         
         Args:
             message: Original message
             error: Error description
+        
+        Returns:
+            bool: True if successful, False if queue unavailable
         """
+        if not self.is_available():
+            logger.warning(f"⚠️ Queue unavailable, cannot move message {message.get('message_id')} to DLQ")
+            return False
+            
         dlq_message = {
             **message,
             "error": error,
@@ -223,9 +276,12 @@ class QueueManager:
             )
             
             logger.warning(f"⚠️ Moved message {message['message_id']} to DLQ: {error}")
+            return True
             
         except Exception as e:
             logger.error(f"❌ Failed to move message to DLQ: {e}")
+            self._is_available = False
+            return False
     
     def retry_message(self, message: Dict[str, Any]) -> bool:
         """
@@ -281,6 +337,15 @@ class QueueManager:
         Returns:
             stats: Queue metrics (sizes, processing rates, etc.)
         """
+        if not self.is_available():
+            return {
+                "status": "unavailable",
+                "ambiguous_queue_size": 0,
+                "result_queue_size": 0,
+                "dead_letter_queue_size": 0,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
         try:
             if queue_config.ENABLE_PRIORITY_QUEUE:
                 ambiguous_count = self.redis_client.zcard(
@@ -299,6 +364,7 @@ class QueueManager:
             )
             
             stats = {
+                "status": "available",
                 "ambiguous_queue_size": ambiguous_count,
                 "result_queue_size": result_count,
                 "dead_letter_queue_size": dlq_count,
@@ -310,7 +376,15 @@ class QueueManager:
             
         except Exception as e:
             logger.error(f"❌ Failed to get queue stats: {e}")
-            return {}
+            self._is_available = False
+            return {
+                "status": "error",
+                "error": str(e),
+                "ambiguous_queue_size": 0,
+                "result_queue_size": 0,
+                "dead_letter_queue_size": 0,
+                "timestamp": datetime.utcnow().isoformat()
+            }
     
     def clear_queue(self, queue_name: str) -> None:
         """
@@ -332,11 +406,15 @@ class QueueManager:
         Returns:
             bool: True if healthy, False otherwise
         """
+        if not self.is_available():
+            return False
         try:
             self.redis_client.ping()
+            self._is_available = True
             return True
         except Exception as e:
             logger.error(f"❌ Queue health check failed: {e}")
+            self._is_available = False
             return False
     
     def close(self) -> None:
@@ -348,5 +426,9 @@ class QueueManager:
             logger.error(f"❌ Error closing Queue Manager: {e}")
 
 
-# Global queue manager instance
-queue_manager = QueueManager()
+# Global queue manager instance (initialized with graceful failure)
+try:
+    queue_manager = QueueManager(fail_silently=True)
+except Exception:
+    # If initialization fails completely, create a dummy instance
+    queue_manager = None

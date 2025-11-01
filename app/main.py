@@ -21,6 +21,11 @@ from typing import Any, Dict, Optional, List
 print("Attempting to import Decision Engine...")
 from app.ai.intent_classification.decision_engine import get_intent_classification
 from app.api.v1.intent import router as intent_router
+try:
+    from app.api.v1.queue import router as queue_router
+    QUEUE_ROUTER_AVAILABLE = True
+except ImportError:
+    QUEUE_ROUTER_AVAILABLE = False
 print("Successfully imported Decision Engine.")
 
 # --- Qdrant Client Import ---
@@ -29,6 +34,18 @@ from qdrant_client import QdrantClient, models
 
 # Load environment variables
 load_dotenv()
+
+# --- Queue Infrastructure Import (CNS-21) ---
+try:
+    from app.queue.queue_manager import queue_manager
+    from app.queue.monitor import queue_monitor
+    QUEUE_AVAILABLE = True
+except Exception as e:
+    print(f"⚠️ Queue infrastructure not available: {e}")
+    queue_manager = None
+    queue_monitor = None
+    QUEUE_AVAILABLE = False
+# --- End Queue Infrastructure Import ---
 
 # --- Qdrant Configuration ---
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
@@ -39,6 +56,12 @@ VECTOR_SIZE = 384  # This MUST match your embedding model (all-MiniLM-L6-v2)
 
 
 # --- Initialize Qdrant Client with Retry Logic ---
+QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+# Use QDRANT_URL if set, otherwise construct from host/port
+if not QDRANT_URL or QDRANT_URL == "http://localhost:6333":
+    QDRANT_URL = f"http://{QDRANT_HOST}:{QDRANT_PORT}"
+
 print(f"Attempting to connect to Qdrant at {QDRANT_URL}...")
 qdrant_client = None
 retries = 5
@@ -76,6 +99,19 @@ async def lifespan(app: FastAPI):
     Handles startup and shutdown events.
     """
     print(" Starting Intent Classification API...")
+    
+    # --- Initialize Queue Infrastructure (CNS-21) ---
+    if QUEUE_AVAILABLE and queue_manager:
+        try:
+            if queue_manager.health_check():
+                print("✅ Queue infrastructure ready (Redis connected)")
+            else:
+                print("⚠️ Queue infrastructure available but Redis not connected")
+        except Exception as e:
+            print(f"⚠️ Queue health check failed: {e}")
+    else:
+        print("⚠️ Queue infrastructure not available (will continue without async processing)")
+    # --- End Queue Initialization ---
     
     # --- Initialize the Decision Engine singleton ---
     # This call will load all models on startup
@@ -148,6 +184,8 @@ async def root() -> Dict[str, Any]:
 @app.get("/health", tags=["Health"])
 async def health_check() -> Dict[str, Any]:
     """Detailed health check endpoint."""
+    from datetime import datetime
+    
     # Check Qdrant connection status
     qdrant_status = "disconnected"
     if qdrant_client:
@@ -156,15 +194,44 @@ async def health_check() -> Dict[str, Any]:
             qdrant_status = "connected"
         except Exception:
             qdrant_status = "unhealthy"
+    
+    # Check Redis/Queue status
+    redis_status = "unavailable"
+    queue_stats = {}
+    if QUEUE_AVAILABLE and queue_manager:
+        try:
+            if queue_manager.health_check():
+                redis_status = "connected"
+                queue_stats = queue_manager.get_queue_stats()
+            else:
+                redis_status = "disconnected"
+        except Exception as e:
+            redis_status = f"error: {str(e)}"
+    
+    # Check OpenAI status (if configured)
+    openai_status = "not_configured"
+    try:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if api_key:
+            openai_status = "configured"
+        else:
+            openai_status = "not_configured"
+    except Exception:
+        openai_status = "unknown"
+
+    overall_status = "healthy"
+    if qdrant_status == "unhealthy" or redis_status.startswith("error"):
+        overall_status = "degraded"
 
     return {
-        "status": "healthy",
-        "timestamp": "2024-01-01T00:00:00Z",
+        "status": overall_status,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
         "services": {
             "qdrant": qdrant_status,
-            "redis": "connected",     # This would be dynamic
-            "openai": "available"     # This would be dynamic
+            "redis": redis_status,
+            "openai": openai_status
         },
+        "queue": queue_stats,
         "version": os.getenv("APP_VERSION", "1.0.0")
     }
 
@@ -288,6 +355,13 @@ async def classify_intent(user_input: ClassificationInput) -> ClassificationOutp
 
 # Include API routers
 app.include_router(intent_router)
+
+# Include queue router if available
+if QUEUE_ROUTER_AVAILABLE:
+    try:
+        app.include_router(queue_router, prefix="/api/v1")
+    except Exception as e:
+        print(f"⚠️ Failed to include queue router: {e}")
 
 # app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"])
 # app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])

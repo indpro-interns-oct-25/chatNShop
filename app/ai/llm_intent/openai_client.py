@@ -2,7 +2,7 @@ import os
 import time
 import logging
 from typing import Any, Dict, Optional
-import openai
+from openai import OpenAI, RateLimitError, APIError, APITimeoutError, APIConnectionError
 import threading
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, RetryError
 
@@ -69,14 +69,18 @@ class OpenAIClient:
         self.circuit_breaker = CircuitBreaker(max_failures=circuit_max_failures, reset_timeout=circuit_cooldown)
         self.log_calls = log_calls
 
-        openai.api_key = self.api_key
+        # Initialize OpenAI client (v1.x API)
+        if self.api_key:
+            self.client = OpenAI(api_key=self.api_key, timeout=self.timeout)
+        else:
+            self.client = None
 
     # === RETRY/Timeout decorator ===
     def _retry_decorator(self, method):
         return retry(
             wait=wait_exponential(multiplier=1, min=2, max=15),
             stop=stop_after_attempt(self.retry_attempts),
-            retry=retry_if_exception_type((openai.error.RateLimitError, openai.error.APIError, openai.error.Timeout)),
+            retry=retry_if_exception_type((RateLimitError, APIError, APITimeoutError, APIConnectionError)),
             reraise=True,
         )(method)
 
@@ -94,25 +98,34 @@ class OpenAIClient:
         }
         if extra_kwargs:
             kwargs.update(extra_kwargs)
+        if not self.client:
+            raise RuntimeError("OpenAI client not initialized. API key is required.")
+        
         t0 = time.time()
         try:
-            response = openai.ChatCompletion.create(**kwargs)
+            # Use OpenAI v1.x API
+            response = self.client.chat.completions.create(**kwargs)
             latency = time.time() - t0
-            # Parse and validate response:
+            
+            # Parse and validate response (v1.x response structure)
             result = self._parse_response(response)
-            usage = response.get("usage", {})
+            usage = response.usage.model_dump() if response.usage else {}
+            
             # Log
             if self.log_calls:
                 logger.info(f"OpenAI call | model={self.model_name} | temp={kwargs['temperature']} | max_tokens={kwargs['max_tokens']} | latency={latency:.2f}s | prompt_tokens={usage.get('prompt_tokens','?')} | completion_tokens={usage.get('completion_tokens','?')}")
             return {"latency_ms": int(latency * 1000), "response": result, "usage": usage}
-        except openai.error.RateLimitError as e:
+        except RateLimitError as e:
             logger.warning(f"OpenAI rate limit hit: {e}")
             raise
-        except openai.error.Timeout as e:
+        except APITimeoutError as e:
             logger.error(f"OpenAI timeout: {e}")
             raise
-        except Exception as e:
+        except APIError as e:
             logger.error(f"OpenAI API error: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"OpenAI unexpected error: {e}")
             raise
 
     def complete(self, payload: Dict[str, Any], **opts) -> Dict[str, Any]:
@@ -147,18 +160,33 @@ class OpenAIClient:
             logger.error(f"OpenAIClient: Fatal error: {ex}")
             return {"error": str(ex)}
 
-    def _parse_response(self, response: Any):
-        """Parses and validates the LLM's response object from OpenAI."""
-        if isinstance(response, dict):
-            try:
-                # Standard OpenAI response
-                return response["choices"][0]["message"]["content"]
-            except Exception as e:
-                logger.error(f"Malformed OpenAI response: {e}")
-                raise ValueError("Malformed OpenAI response (missing choices.message.content)") from e
-        else:
-            logger.error(f"Malformed OpenAI response (not dict): {response}")
-            raise ValueError("Malformed OpenAI response (not dict)")
+    def _parse_response(self, response: Any) -> str:
+        """Parses and validates the LLM's response object from OpenAI (v1.x format)."""
+        try:
+            # OpenAI v1.x response is an object, not a dict
+            if hasattr(response, 'choices') and len(response.choices) > 0:
+                choice = response.choices[0]
+                if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
+                    content = choice.message.content
+                    if not content:
+                        raise ValueError("No content in OpenAI response message")
+                    return content
+            
+            # Fallback for dict format (shouldn't happen with v1.x but handle it)
+            if isinstance(response, dict):
+                choices = response.get("choices", [])
+                if not choices:
+                    raise ValueError("No choices in OpenAI response")
+                message = choices[0].get("message", {})
+                content = message.get("content", "")
+                if not content:
+                    raise ValueError("No content in OpenAI response message")
+                return content
+            
+            raise ValueError(f"Unexpected OpenAI response format: {type(response)}")
+        except Exception as e:
+            logger.error(f"Failed to parse OpenAI response: {e}")
+            raise
 
     # Optional: Provide info/probe endpoints
     def status(self):

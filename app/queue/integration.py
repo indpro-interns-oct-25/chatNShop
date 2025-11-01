@@ -5,7 +5,7 @@ Integrates queue infrastructure with CNS-12 Ambiguity Resolver.
 Routes ambiguous/unclear queries to LLM processing queue.
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from loguru import logger
 
 from app.queue.queue_manager import queue_manager
@@ -18,7 +18,7 @@ def send_to_llm_queue(
     ambiguity_result: Dict[str, Any],
     user_id: str = "anonymous",
     is_premium: bool = False
-) -> str:
+) -> Optional[str]:
     """
     Send ambiguous/unclear query to LLM processing queue.
     
@@ -31,7 +31,7 @@ def send_to_llm_queue(
         is_premium: Whether user has premium subscription
     
     Returns:
-        message_id: Queue message identifier
+        message_id: Queue message identifier, or None if queue unavailable
     
     Example:
         from app.ai.intent_classification.ambiguity_resolver import detect_intent
@@ -44,6 +44,11 @@ def send_to_llm_queue(
                 user_id="user_123"
             )
     """
+    # Check if queue is available
+    if queue_manager is None or not queue_manager.is_available():
+        logger.warning("⚠️ Queue unavailable, cannot send message to LLM queue")
+        return None
+    
     # Determine priority
     priority = (
         queue_config.PRIORITY_HIGH if is_premium 
@@ -68,20 +73,21 @@ def send_to_llm_queue(
             priority=priority
         )
         
-        # Record metrics
-        queue_monitor.record_enqueue()
-        
-        logger.info(
-            f"✅ Sent to LLM queue: {message_id} | "
-            f"Query: '{query}' | Type: {context['ambiguity_type']}"
-        )
+        if message_id:
+            # Record metrics
+            queue_monitor.record_enqueue()
+            
+            logger.info(
+                f"✅ Sent to LLM queue: {message_id} | "
+                f"Query: '{query}' | Type: {context['ambiguity_type']}"
+            )
         
         return message_id
         
     except Exception as e:
         logger.error(f"❌ Failed to send to LLM queue: {e}")
         queue_monitor.record_failure()
-        raise
+        return None
 
 
 def get_classification_result(message_id: str, timeout: int = 30) -> Dict[str, Any]:
