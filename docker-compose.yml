@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   qdrant:
     image: qdrant/qdrant:latest
@@ -9,8 +11,16 @@ services:
       - qdrant_storage:/qdrant/storage
     environment:
       QDRANT__STORAGE__STORAGE_PATH: /qdrant/storage
+      QDRANT__SERVICE__HTTP_PORT: 6333
       QDRANT__SERVICE__GRPC_PORT: 6334
-      QDRANT__SERVICE__API_KEY: qdrant-secret-key
+      QDRANT__SERVICE__API_KEY: mykey@123
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
@@ -45,17 +55,20 @@ services:
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4-turbo}
       - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.3}
       - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-400}
-    restart: unless-stopped
     depends_on:
+      qdrant:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 20s
       timeout: 10s
-      retries: 3
       start_period: 40s
 
+# ==============================
+# Persistent Storage
+# ==============================
 volumes:
   qdrant_storage:
-  redis_data:
