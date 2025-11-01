@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   qdrant:
     image: qdrant/qdrant:latest
@@ -8,10 +10,33 @@ services:
     volumes:
       - qdrant_storage:/qdrant/storage
     environment:
-      - QDRANT__SERVICE__HTTP_PORT=6333
-      - QDRANT__SERVICE__GRPC_PORT=6334
-      - QDRANT__SERVICE__API_KEY=mykey@123
+      QDRANT__STORAGE__STORAGE_PATH: /qdrant/storage
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__SERVICE__GRPC_PORT: 6334
+      QDRANT__SERVICE__API_KEY: mykey@123
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: chatns-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --save 60 1 --loglevel warning --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
   intent-api:
     build: .
@@ -23,12 +48,29 @@ services:
       - PORT=8000
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
+      - QDRANT_URL=http://qdrant:6333
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4-turbo}
+      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.3}
+      - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-400}
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 20s
       timeout: 10s
       retries: 3
+      start_period: 40s
 
+# ==============================
+# Persistent Storage
+# ==============================
 volumes:
   qdrant_storage:
+  redis_data:
