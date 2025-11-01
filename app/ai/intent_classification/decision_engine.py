@@ -1,20 +1,33 @@
 """
 Decision Engine
-This file contains the main logic for the intent classification.
-Now integrated with config manager for dynamic configuration and A/B testing.
+Handles hybrid rule-based + embedding + LLM fallback intent classification.
+Now includes resilience, caching, structured logging, and queue-based escalation.
 """
 import os
 from typing import List, Dict, Any
 
+import os
+import re
+from typing import Dict, Any
+import uuid
+import traceback
+import logging
+
 # --- CONFIG MANAGER INTEGRATION ---
-# Import config manager for dynamic configuration
 from app.core.config_manager import CONFIG_CACHE, ACTIVE_VARIANT, switch_variant
-from app.ai.config import PRIORITY_THRESHOLD, WEIGHTS  # Fallback config
+from app.ai.config import PRIORITY_THRESHOLD, WEIGHTS
 from app.ai.intent_classification.keyword_matcher import KeywordMatcher
 from app.ai.intent_classification.embedding_matcher import EmbeddingMatcher
 from app.ai.intent_classification.hybrid_classifier import HybridClassifier
 from app.ai.intent_classification import confidence_threshold
-# Optional LLM fallback
+
+# --- QDRANT INTEGRATION ---
+try:
+    from app.ai.llm_intent.qdrant_cache import store_vector
+except Exception:
+    store_vector = None
+
+# --- LLM HANDLER / FALLBACK INTEGRATION ---
 try:
     from app.ai.llm_intent.request_handler import RequestHandler as _LLMHandler
     from app.ai.llm_intent.openai_client import OpenAIClient as _OpenAIClient
@@ -24,175 +37,281 @@ except Exception:
     _OpenAIClient = None  # type: ignore
     _LLMReq = None  # type: ignore
 # --- END CONFIG MANAGER INTEGRATION ---
+    _LLMHandler = None
+    _OpenAIClient = None
+    _LLMReq = None
+
+# --- RESILIENT CLIENT (NEW) ---
+try:
+    from app.core.resilient_openai_client import resilient_client
+except Exception:
+    resilient_client = None
+
+# --- ALERT NOTIFIER (NEW ADDITION) ---
+try:
+    from app.core.alert_notifier import send_alert
+except Exception:
+    send_alert = None
+
+# --- LOGGER ---
+logger = logging.getLogger("decision_engine")
+logger.setLevel(logging.INFO)
+
+# --- TEXT NORMALIZER ---
+def _clean_text(query: str) -> str:
+    """Normalize common typos, spacing issues, and casing."""
+    query = query.lower().strip()
+    query = re.sub(r"ing\s+", "ing", query)  # Fix 'show ing' → 'showing'
+    query = re.sub(r"\s+", " ", query)       # Remove extra spaces
+    query = re.sub(r"[^a-z0-9\s]", "", query)  # Clean punctuation
+    return query
+
 
 class DecisionEngine:
-    """
-    Orchestrates the hybrid search process.
-    Now supports dynamic configuration via config manager.
-    """
+    """Orchestrates hybrid search with resilience, caching, and escalation."""
+
     def __init__(self):
-        """
-        Initializes the Decision Engine and its constituent matchers.
-        Now uses config manager for dynamic configuration.
-        """
         print("Initializing DecisionEngine...")
         self.keyword_matcher = KeywordMatcher()
-        # Lazy-load embedding matcher to avoid loading model when disabled or in tests
         self.embedding_matcher = None
-        # Initialize hybrid classifier (weights will be updated from config)
         self.hybrid_classifier = HybridClassifier()
-        
-        # Load settings from config manager (with fallback to static config)
+        self._cache: Dict[str, Dict[str, Any]] = {}  # ✅ Local read-through cache
         self._load_config_from_manager()
-        print(f"✅ DecisionEngine Initialized: Settings loaded from config manager (variant: {ACTIVE_VARIANT})")
-    
+        print(f"✅ DecisionEngine Initialized: variant={ACTIVE_VARIANT}")
+
+    # ------------------------------------------------------------------
     def _load_config_from_manager(self):
-        """
-        Load configuration from config manager with fallback to static config.
-        """
+        """Loads config dynamically or uses fallback."""
         try:
-            # Import here to get fresh values
-            from app.core.config_manager import CONFIG_CACHE, ACTIVE_VARIANT
-            
-            # Try to get rules from config manager (supports nested schema: {"rules": {"rule_sets": {...}}})
-            rules_root = CONFIG_CACHE.get('rules', {})
-            rules = rules_root.get('rules', rules_root)
-            rule_sets = rules.get('rule_sets', {})
+            rules_root = CONFIG_CACHE.get("rules", {})
+            rules = rules_root.get("rules", rules_root)
+            rule_sets = rules.get("rule_sets", {})
             current_rules = rule_sets.get(ACTIVE_VARIANT, {})
-            
-            # Use config manager settings if available
+
             if current_rules:
-                self.use_embedding = current_rules.get('use_embedding', True)
-                self.use_keywords = current_rules.get('use_keywords', True)
-                # Load dynamic weights/thresholds if present
-                self.kw_weight = current_rules.get('kw_weight', WEIGHTS.get('keyword', 0.6))
-                self.emb_weight = current_rules.get('emb_weight', WEIGHTS.get('embedding', 0.4))
-                self.priority_threshold = current_rules.get('priority_threshold', PRIORITY_THRESHOLD)
-                # Update classifier weights
+                self.use_embedding = current_rules.get("use_embedding", True)
+                self.use_keywords = current_rules.get("use_keywords", True)
+                self.kw_weight = current_rules.get("kw_weight", WEIGHTS.get("keyword", 0.6))
+                self.emb_weight = current_rules.get("emb_weight", WEIGHTS.get("embedding", 0.4))
+                self.priority_threshold = current_rules.get("priority_threshold", PRIORITY_THRESHOLD)
                 self.hybrid_classifier.update_weights(self.kw_weight, self.emb_weight)
-                print(
-                    f"📋 Using config manager rules for variant {ACTIVE_VARIANT}: "
-                    f"embedding={self.use_embedding}, keywords={self.use_keywords}, "
-                    f"kw_weight={self.kw_weight}, emb_weight={self.emb_weight}, "
-                    f"threshold={self.priority_threshold}"
-                )
+                print(f"📋 Using dynamic rules for {ACTIVE_VARIANT}")
             else:
-                # Fallback to static config (Variant A defaults)
-                self.use_embedding = True
-                self.use_keywords = True
-                self.priority_threshold = 0.85
-                self.kw_weight = 0.6
-                self.emb_weight = 0.4
-                # Update classifier weights
-                self.hybrid_classifier.update_weights(self.kw_weight, self.emb_weight)
-                print("📋 Using fallback static config (Variant A: kw=0.6, emb=0.4, threshold=0.85)")
-                
+                raise KeyError("Missing dynamic config")
+
         except Exception as e:
-            # Fallback to static config on any error (Variant A)
-            print(f"⚠️ Config manager error, using fallback: {e}")
+            print(f"⚠️ Config manager error: {e} — Using fallback defaults.")
             self.use_embedding = True
             self.use_keywords = True
             self.priority_threshold = 0.85
             self.kw_weight = 0.6
             self.emb_weight = 0.4
-            # Update classifier weights
             self.hybrid_classifier.update_weights(self.kw_weight, self.emb_weight)
 
+    # ------------------------------------------------------------------
+    def _send_escalation_alert(self, reason: str, query: str):
+        """Concrete escalation path integrated with alert_notifier."""
+        alert_id = str(uuid.uuid4())
+        logger.warning(f"[ALERT:{alert_id}] Escalation: {reason} | Query='{query}'")
+        if send_alert:
+            try:
+                send_alert(
+                    event_type=reason,
+                    context={
+                        "query": query,
+                        "alert_id": alert_id,
+                        "source": "DecisionEngine",
+                    },
+                )
+            except Exception as e:
+                logger.error(f"Failed to send escalation alert: {e}")
+
+    # ------------------------------------------------------------------
     def search(self, query: str) -> Dict[str, Any]:
-        """
-        Executes the full hybrid search flow and evaluates confidence.
-        Now respects config manager settings for A/B testing.
-        """
-        # Reload config in case it changed (for hot-reload)
+        """Executes hybrid search + LLM + cache fallback with resilience."""
+        correlation_id = str(uuid.uuid4())
+        logger.info(f"[{correlation_id}] 🔍 Starting intent classification for: '{query}'")
+
+        # 🧹 Clean query text to handle typos like “show ing”
+        query = _clean_text(query)
+
+        # ✅ Cache read-through fallback
+        if query in self._cache:
+            logger.info(f"[{correlation_id}] Cache hit for query '{query}'")
+            return self._cache[query]
+
+        try:
+            # Run hybrid classification
+            result = self._run_hybrid_search(query)
+            self._cache[query] = result  # Cache successful result
+            return result
+
+        except Exception as e:
+            logger.error(f"[{correlation_id}] Hybrid classification failed: {e}", exc_info=True)
+            traceback.print_exc()
+
+            # 🔄 LLM fallback (resilient)
+            if resilient_client:
+                try:
+                    llm_result = resilient_client.call(query)
+                    self._send_escalation_alert("LLM_FALLBACK_TRIGGERED", query)
+                    result = {
+                        "status": "FALLBACK_LLM",
+                        "intent": llm_result,
+                        "correlation_id": correlation_id,
+                    }
+                    self._cache[query] = result
+                    return result
+                except Exception as llm_e:
+                    logger.error(f"[{correlation_id}] LLM fallback failed: {llm_e}", exc_info=True)
+                    self._send_escalation_alert("LLM_FALLBACK_FAILURE", query)
+
+            # 🧩 Last-good fallback if LLM unavailable
+            fallback = {
+                "status": "FALLBACK_LAST_GOOD",
+                "intent": {
+                    "id": "SEARCH_PRODUCT",
+                    "intent": "SEARCH_PRODUCT",
+                    "score": 0.3,
+                    "source": "cached_default",
+                },
+                "correlation_id": correlation_id,
+            }
+            self._send_escalation_alert("CACHE_FALLBACK", query)
+            self._cache[query] = fallback
+            return fallback
+
+    # ------------------------------------------------------------------
+    def _run_hybrid_search(self, query: str) -> Dict[str, Any]:
+        """Main hybrid + queue-enhanced logic."""
         self._load_config_from_manager()
-        
+
         keyword_results = []
         embedding_results = []
-        
-        # Use keyword matching if enabled
+
         if self.use_keywords:
             keyword_results = self.keyword_matcher.search(query)
-            
-            # Apply the priority rule (if keywords enabled)
-            if keyword_results and keyword_results[0]['score'] >= getattr(self, 'priority_threshold', PRIORITY_THRESHOLD):
-                print(f"✅ Priority rule triggered. Returning high-confidence keyword match: {keyword_results[0]['id']}")
+            if keyword_results and keyword_results[0]["score"] >= self.priority_threshold:
+                logger.info(f"✅ High-confidence keyword match: {keyword_results[0]['id']}")
                 return {
                     "status": "CONFIDENT_KEYWORD",
                     "intent": keyword_results[0],
-                    "config_variant": ACTIVE_VARIANT
+                    "config_variant": ACTIVE_VARIANT,
                 }
-        
-        # Use embedding matching if enabled
+
         if self.use_embedding:
-            if self.embedding_matcher is None:
+            if not self.embedding_matcher:
                 self.embedding_matcher = EmbeddingMatcher()
             embedding_results = self.embedding_matcher.search(query)
-        
-        # Blend results if both methods are enabled
+
         if self.use_keywords and self.use_embedding:
             blended_results = self.hybrid_classifier.blend(keyword_results, embedding_results)
-        elif self.use_keywords and keyword_results:
+        elif self.use_keywords:
             blended_results = keyword_results
-        elif self.use_embedding and embedding_results:
+        elif self.use_embedding:
             blended_results = embedding_results
         else:
             blended_results = []
 
         if not blended_results:
-            # Enhanced fallback: try with lower thresholds
-            print(f"⚠ No match found for query: '{query}', trying fallback...")
-            
-            # Fallback 1: Lower embedding threshold
-            if embedding_results:
-                embedding_results_lower = [r for r in embedding_results if r['score'] >= 0.3]
-                if embedding_results_lower:
-                    print(f"✅ Fallback found embedding match with lower threshold")
-                    return {
-                        "status": "FALLBACK_EMBEDDING",
-                        "intent": embedding_results_lower[0],
-                        "config_variant": ACTIVE_VARIANT
-                    }
-            
-            # Fallback 2: Lower keyword threshold
-            if keyword_results:
-                keyword_results_lower = [r for r in keyword_results if r['score'] >= 0.3]
-                if keyword_results_lower:
-                    print(f"✅ Fallback found keyword match with lower threshold")
-                    return {
-                        "status": "FALLBACK_KEYWORD",
-                        "intent": keyword_results_lower[0],
-                        "config_variant": ACTIVE_VARIANT
-                    }
-            
-            # Fallback 3: Generic search intent
-            print(f"⚠ No specific match found, returning generic search intent")
-            return {
-                "status": "FALLBACK_GENERIC",
-                "intent": {
-                    "id": "SEARCH_PRODUCT",
-                    "intent": "SEARCH_PRODUCT", 
-                    "score": 0.1,
-                    "source": "fallback",
-                    "reason": "generic_search_fallback"
-                },
-                "config_variant": ACTIVE_VARIANT
-            }
+            logger.warning(f"⚠ No match found for query '{query}'. Falling back.")
+            return self._fallback_generic(query)
 
-        # Evaluate final confidence
+        # 🚦 Confidence threshold guard
+        if blended_results and blended_results[0].get("score", 0.0) < 0.3:
+            logger.warning(f"⚠ Low confidence score ({blended_results[0].get('score')}). Forcing fallback.")
+            return self._fallback_generic(query)
+
         is_confident, reason = confidence_threshold.is_confident(blended_results)
-
         if is_confident:
-            print(f"✅ Blended result is confident. Reason: {reason}")
+            logger.info(f"✅ Blended result is confident. Reason: {reason}")
             return {
                 "status": reason,
                 "intent": blended_results[0],
-                "config_variant": ACTIVE_VARIANT
+                "config_variant": ACTIVE_VARIANT,
             }
+
+        # 🚀 Queue-based fallback + LLM fallback
+        logger.warning(f"⚠ Blended result is NOT confident. Reason: {reason}")
+
+        enable_queue = os.getenv("ENABLE_LLM_QUEUE", "true").lower() == "true"
+        if enable_queue:
+            try:
+                from app.queue.integration import send_to_llm_queue
+                from app.ai.intent_classification.ambiguity_resolver import detect_intent
+
+                ambiguity_result = detect_intent(query)
+                if ambiguity_result.get("action") in ["AMBIGUOUS", "UNCLEAR"]:
+                    message_id = send_to_llm_queue(
+                        query=query,
+                        ambiguity_result=ambiguity_result,
+                        user_id="anonymous",
+                        is_premium=False,
+                    )
+                    if message_id:
+                        logger.info(f"✅ Sent ambiguous query to queue: {message_id}")
+                        return {
+                            "status": "QUEUED_FOR_LLM",
+                            "intent": {
+                                "id": "PROCESSING",
+                                "intent": "PROCESSING",
+                                "score": 0.0,
+                                "source": "queue",
+                                "message_id": message_id,
+                            },
+                            "message": "Query sent to LLM queue for processing",
+                            "config_variant": ACTIVE_VARIANT,
+                        }
+            except Exception as e:
+                logger.warning(f"⚠ Queue integration error: {e}. Falling back to sync LLM processing.")
+
+        # Fallback: Sync LLM call
+        if _LLMHandler and _LLMReq and _OpenAIClient:
+            try:
+                api_key = os.getenv("OPENAI_API_KEY")
+                if not api_key:
+                    logger.warning("⚠ OPENAI_API_KEY not set, skipping LLM fallback")
+                else:
+                    llm_client = _OpenAIClient()
+                    handler = _LLMHandler(client=llm_client)
+                    top_kw = keyword_results[0]["score"] if keyword_results else 0.0
+                    next_kw = keyword_results[1]["score"] if len(keyword_results) > 1 else 0.0
+                    llm_req = _LLMReq(
+                        user_input=query,
+                        rule_intent=blended_results[0]["id"] if blended_results else None,
+                        action_code=blended_results[0]["id"] if blended_results else None,
+                        top_confidence=float(top_kw),
+                        next_best_confidence=float(next_kw),
+                        is_fallback=True,
+                    )
+                    llm_out = handler.handle(llm_req)
+                    if llm_out and isinstance(llm_out, dict):
+                        resolved = {
+                            "id": llm_out.get("action_code"),
+                            "intent": llm_out.get("action_code"),
+                            "score": llm_out.get("confidence", 0.0),
+                            "source": "llm",
+                            "reason": "llm_fallback",
+                        }
+                        return {
+                            "status": "LLM_FALLBACK",
+                            "intent": resolved,
+                            "config_variant": ACTIVE_VARIANT,
+                        }
+            except Exception as e:
+                logger.error(f"⚠ LLM fallback error: {e}", exc_info=True)
+
+        # Deterministic fallback
+        if blended_results:
+            blended_results.sort(key=lambda x: (x.get("score", 0.0), x.get("embedding_score", 0.0)), reverse=True)
+            top = blended_results[0]
+            logger.info("✅ Selecting top blended action deterministically")
         else:
             # Deterministic selection on low-confidence: pick top blended action
             print(f"⚠ Blended result is NOT confident. Reason: {reason}")
             
             # Try queue-based async processing for ambiguous queries (CNS-21)
+            # Try queue-based async processing for ambiguous queries
             # Enabled by default for main endpoint
             # To disable queue: set ENABLE_LLM_QUEUE=false in environment
             enable_queue = os.getenv("ENABLE_LLM_QUEUE", "true").lower() == "true"
@@ -270,6 +389,7 @@ class DecisionEngine:
                             return {
                                 "status": "LLM_FALLBACK",
                                 "intent": resolved,
+                                "entities": llm_out.get("entities"),  # NEW: Pass entities
                                 "config_variant": ACTIVE_VARIANT
                             }
                 except Exception as e:
@@ -290,30 +410,37 @@ class DecisionEngine:
             # Final fallback to generic search
             print(f"⚠ No suitable results, returning generic search")
             return {
-                "status": "FALLBACK_GENERIC",
-                "intent": {
-                    "id": "SEARCH_PRODUCT",
-                    "intent": "SEARCH_PRODUCT",
-                    "score": 0.1,
-                    "source": "fallback",
-                    "reason": "generic_search_fallback"
-                },
-                "config_variant": ACTIVE_VARIANT
+                "status": f"BLENDED_TOP_{reason}",
+                "intent": top,
+                "config_variant": ACTIVE_VARIANT,
             }
 
+        logger.warning("⚠ No suitable results, returning generic search")
+        return self._fallback_generic(query)
+
+    # ------------------------------------------------------------------
+    def _fallback_generic(self, query: str) -> Dict[str, Any]:
+        """Generic search fallback intent."""
+        return {
+            "status": "FALLBACK_GENERIC",
+            "intent": {
+                "id": "SEARCH_PRODUCT",
+                "intent": "SEARCH_PRODUCT",
+                "score": 0.1,
+                "source": "fallback",
+            },
+            "config_variant": ACTIVE_VARIANT,
+        }
 
 
-# Global instance for the main API
+# ----------------------------------------------------------------------
+# Singleton for app.main
+# ----------------------------------------------------------------------
 _decision_engine = None
 
+
 def get_intent_classification(query: str) -> Dict[str, Any]:
-    """
-    Main function for intent classification.
-    Creates a DecisionEngine instance if needed and processes the query.
-    """
     global _decision_engine
-    
     if _decision_engine is None:
         _decision_engine = DecisionEngine()
-    
     return _decision_engine.search(query)

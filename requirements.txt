@@ -24,11 +24,11 @@ qdrant-client==1.9.1
 # Machine Learning & AI
 # -----------------------------
 openai==1.52.2
-torch==2.4.1                       # 2.5.0 still experimental; 2.4.1 is LTS-safe
-transformers==4.45.2               # stable with torch 2.4+
-sentence-transformers==3.1.1       # stable with transformers 4.45+
+torch==2.4.1
+transformers==4.45.2
+sentence-transformers==3.1.1
 huggingface-hub==0.25.2
-numpy==1.26.4                      # last 1.x version, avoids numpy 2.0 issues
+numpy==1.26.4
 scikit-learn==1.5.2
 
 # -----------------------------

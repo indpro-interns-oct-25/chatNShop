@@ -1,35 +1,50 @@
 import os
 import json
 
-# Path to the keywords folder (adjust if needed)
-KEYWORDS_FOLDER = os.path.dirname(__file__)
+def load_all_keywords(keywords_dir=None):
+    """
+    Load all keyword JSON files from the given directory.
+    Returns a dictionary: 
+    {
+        "intent_name": {
+            "priority": int,
+            "keywords": [list of keyword strings]
+        }
+    }
+    """
+    if keywords_dir is None:
+        keywords_dir = os.path.dirname(__file__)   # default to current folder
 
-def load_keywords():
-    """
-    Load all JSON files in the keywords folder and return a dictionary
-    with intent categories and keywords.
-    """
     all_keywords = {}
 
-    # Iterate over all .json files in the folder
-    for filename in os.listdir(KEYWORDS_FOLDER):
-        if filename.endswith(".json"):
-            filepath = os.path.join(KEYWORDS_FOLDER, filename)
+    for file_name in os.listdir(keywords_dir):
+        if file_name.endswith(".json"):
+            file_path = os.path.join(keywords_dir, file_name)
             try:
-                with open(filepath, "r", encoding="utf-8") as f:
+                with open(file_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    # Merge into the main dictionary
-                    all_keywords.update(data)
-            except json.JSONDecodeError as e:
-                print(f"Error decoding JSON in {filename}: {e}")
+                    if isinstance(data, dict):
+                        all_keywords.update(data)
+                    else:
+                        print(f"⚠️ Skipping invalid JSON file: {file_name} (Expected dict, got {type(data)})")
             except Exception as e:
-                print(f"Error loading {filename}: {e}")
-    
+                print(f"⚠️ Skipping invalid JSON file: {file_name} ({e})")
+
     return all_keywords
 
-# If this file is run directly, print loaded keywords
+
+# ✅ Change made here — added a wrapper for compatibility
+def load_keywords(keywords_dir=None):
+    """
+    Compatibility alias for old code that still calls load_keywords().
+    Internally calls load_all_keywords().
+    """
+    return load_all_keywords(keywords_dir)
+
+
+# Optional standalone test
 if __name__ == "__main__":
-    keywords = load_keywords()
+    keywords = load_all_keywords()
     print("Loaded keyword intents:")
     for intent, details in keywords.items():
         print(f"{intent} (priority {details.get('priority')}): {len(details.get('keywords', []))} keywords")

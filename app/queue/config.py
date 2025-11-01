@@ -1,5 +1,5 @@
 """
-Queue Configuration (CNS-21)
+Queue Configuration
 
 Technical decisions:
 - Technology: Redis (already in requirements.txt)

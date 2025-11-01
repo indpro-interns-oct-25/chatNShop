@@ -7,12 +7,7 @@
       "search goods", "find item", "look up product", "product query", "shop for",
       "search catalogue", "search online", "search shop", "search inventory", "find in store",
       "explore products", "discover product", "search merchandise", "product browse", "product hunting",
-      "track product", "product list", "check product availability", "find specific product", "search item details",
-      "serch product", "serach product", "seach product", "findd product", "lookk for product",
-      "browsee products", "prodcut search", "prodcuts search", "itemss search", "findd item",
-      "lookk up product", "prodcut query", "serch items", "findd specific product", "prodcut details",
-      "serach items", "lookk for item", "prodcut finder", "serch goods", "findd goods",
-      "browsee items", "serach online", "prodcut lookup", "itemss finder", "serch catalogue"
+      "track product", "product list", "check product availability", "find specific product", "search item details"
     ]
   },
   "SEARCH_CATEGORY": {
@@ -92,9 +87,8 @@
       "sort by reviews", "hot selling products", "most purchased", "popular products online", "popular products today"
     ]
   },
-  
   "SORT_NEWEST": {
-    "priority": 1,
+    "priority": 9,
     "keywords": [
       "sort newest", "newest first", "latest products", "sort by newest",
       "recently added", "latest items", "new arrivals first", "sort by recent",
@@ -105,7 +99,7 @@
     ]
   },
   "SORT_RATING": {
-    "priority": 2,
+    "priority": 10,
     "keywords": [
       "sort by rating", "highest rated first", "top rated products", "sort best reviews",
       "customer rating sort", "product rating order", "sort top rated", "best rated items first",
@@ -116,7 +110,7 @@
     ]
   },
   "SORT_RELEVANCE": {
-    "priority": 3,
+    "priority": 11,
     "keywords": [
       "sort by relevance", "most relevant first", "relevant products", "relevance order",
       "show relevant items", "sort matching results", "best match first", "relevant product list",
@@ -127,7 +121,7 @@
     ]
   },
   "VIEW_GRID": {
-    "priority": 4,
+    "priority": 12,
     "keywords": [
       "view grid", "grid view", "show products in grid", "display in grid",
       "grid layout", "grid format", "product grid view", "grid style display",
@@ -138,7 +132,7 @@
     ]
   },
   "VIEW_LIST": {
-    "priority": 5,
+    "priority": 13,
     "keywords": [
       "view list", "list view", "show products in list", "display in list",
       "list layout", "list format", "product list view", "list style display",
