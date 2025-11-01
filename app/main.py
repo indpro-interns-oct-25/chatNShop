@@ -22,6 +22,7 @@ from datetime import datetime
 from app.status_api import router as status_router
 from app.api.cost_dashboard_api import router as cost_dashboard_router
 from app.api.cost_dashboard_ui import router as cost_dashboard_ui_router
+from app.api.ab_testing_api import router as ab_testing_router
 from app.ai.cost_monitor.scheduler import start_scheduler
 
 # Decision Engine Import
@@ -418,6 +419,7 @@ app.include_router(intent_router)
 app.include_router(status_router)
 app.include_router(cost_dashboard_router)
 app.include_router(cost_dashboard_ui_router)
+app.include_router(ab_testing_router)
 
 if QUEUE_ROUTER_AVAILABLE:
     app.include_router(queue_router, prefix="/api/v1")

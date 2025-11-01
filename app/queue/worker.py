@@ -67,7 +67,7 @@ def process_message(message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not LLM_AVAILABLE or llm_handler is None:
         logger.error("❌ LLM handler not available, cannot process message")
         return None
-    
+
     query = message.get("query", "")
     context = message.get("context", {})
     

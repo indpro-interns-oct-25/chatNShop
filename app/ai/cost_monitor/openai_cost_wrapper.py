@@ -15,7 +15,7 @@ from app.ai.cost_monitor.rate_limiter import RateLimiter
 
 # Configurable per-request limits
 TARGET_P95_LATENCY_MS = 2000
-MAX_REQUEST_COST_USD = 0.02
+MAX_REQUEST_COST_USD = 0.01
 
 # Example per-1k token cost rates (adjust as per your model)
 MODEL_PRICING = {
@@ -42,7 +42,7 @@ class CostAwareOpenAIClient:
     def complete(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Call OpenAIClient.complete() but track cost + latency metrics."""
         # ✅ Step 1: Enforce rate limit
-        if not self.rate_limiter.allow_request():
+        if not self.rate_limiter.allow():
             return {
                 "error": "Rate limit exceeded — please retry after a few seconds."
             }

@@ -102,9 +102,9 @@ class QueueManager:
         if not self.is_available():
             logger.warning("⚠️ Queue unavailable, cannot enqueue message")
             return None
-            
+
         message_id = f"msg_{int(time.time() * 1000)}"
-        
+
         message = {
             "message_id": message_id,
             "query": query,

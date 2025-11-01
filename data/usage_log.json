@@ -4,6 +4,11 @@
       "tokens": 20610,
       "cost": 0.10642,
       "requests": 12
+    },
+    "2025-11-01": {
+      "tokens": 1330,
+      "cost": 0.01002,
+      "requests": 3
     }
   },
   "monthly": {
@@ -11,6 +16,11 @@
       "tokens": 20610,
       "cost": 0.10642,
       "requests": 12
+    },
+    "2025-11": {
+      "tokens": 1330,
+      "cost": 0.01002,
+      "requests": 3
     }
   }
 }
