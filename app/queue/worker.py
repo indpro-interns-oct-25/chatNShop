@@ -1,5 +1,5 @@
 """
-LLM Worker (CNS-21)
+LLM Worker
 
 Processes ambiguous queries from the queue using LLM intent classification.
 This worker should be run as a separate process/container for async processing.
@@ -15,7 +15,7 @@ from app.queue.monitor import queue_monitor
 from app.ai.llm_intent.request_handler import RequestHandler
 from app.schemas.llm_intent import LLMIntentRequest
 
-# Import status store (TASK-16)
+# Import status store for request tracking
 try:
     from app.core.status_store import status_store
     from app.schemas.request_status import ResultSchema
@@ -23,6 +23,15 @@ try:
 except ImportError:
     status_store = None
     STATUS_STORE_AVAILABLE = False
+
+# Import context enhancement components
+try:
+    from app.ai.llm_intent.context_collector import get_context_collector
+    from app.ai.llm_intent.context_summarizer import get_context_summarizer
+    CONTEXT_ENHANCEMENT_AVAILABLE = True
+except ImportError:
+    CONTEXT_ENHANCEMENT_AVAILABLE = False
+    logger.warning("⚠️ Context enhancement not available")
 
 # Initialize LLM handler
 try:
@@ -58,19 +67,101 @@ def process_message(message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         logger.error("❌ LLM handler not available, cannot process message")
         return None
     
-    # Handle both TASK-15 format (user_query) and legacy format (query)
+    # Handle both message formats: user_query (current) and query (legacy)
     query = message.get("user_query") or message.get("query", "")
     context = message.get("_context") or message.get("context", {})
     
     try:
-        # Build LLM request
+        # Initialize variables before use
+        rule_intent = None
+        top_confidence = 0.0
+        next_best_confidence = 0.0
+        
+        # Extract rule_based_result if available
+        rule_based_result = message.get("rule_based_result") or context.get("rule_based_result")
+        if rule_based_result:
+            rule_intent = rule_based_result.get("action_code")
+            top_confidence = rule_based_result.get("confidence", 0.0)
+            # Extract next_best_confidence if available
+            matched_keywords = rule_based_result.get("matched_keywords", [])
+            # If there's a secondary confidence in context, use it
+            possible_intents = context.get("possible_intents", {})
+            if isinstance(possible_intents, dict) and len(possible_intents) > 1:
+                confidences = sorted(possible_intents.values(), reverse=True)
+                next_best_confidence = confidences[1] if len(confidences) > 1 else 0.0
+        
+        # Extract context for LLM
+        # Get conversation history from message
+        conversation_history = message.get("conversation_history", []) or context.get("conversation_history", [])
+        user_id = message.get("user_id") or context.get("user_id")
+        session_id = message.get("session_id") or context.get("session_id")
+        
+        # Use context enhancement if available
+        context_snippets = []
+        if CONTEXT_ENHANCEMENT_AVAILABLE:
+            try:
+                # Collect and summarize context to stay within token limits
+                context_collector = get_context_collector()
+                context_summarizer = get_context_summarizer(max_tokens=2000)
+                
+                # Collect all context (conversation + session)
+                full_context = context_collector.collect_all_context(
+                    conversation_history=conversation_history,
+                    user_id=user_id,
+                    session_id=session_id,
+                    history_limit=5  # Keep last 5 messages
+                )
+                
+                # Truncate context to fit token limits
+                truncated_context = context_summarizer.truncate_context(
+                    full_context,
+                    max_tokens=2000
+                )
+                
+                # Extract conversation history for context_snippets
+                context_snippets = truncated_context.get("conversation_history", [])
+                
+                # Add session context to metadata if present
+                session_context = truncated_context.get("session_context", {})
+                if session_context:
+                    context["session_context"] = session_context
+                
+                logger.debug(f"Enhanced context: {len(context_snippets)} conversation messages, session_context available")
+                
+            except Exception as e:
+                logger.warning(f"⚠️ Context enhancement failed: {e}. Using basic context.")
+                # Fallback to basic context processing
+                if conversation_history and isinstance(conversation_history, list):
+                    context_snippets = conversation_history[-5:]  # Keep last 5 messages
+        else:
+            # Fallback: Convert conversation_history to context_snippets format
+            if conversation_history:
+                if isinstance(conversation_history, list):
+                    for msg in conversation_history[-5:]:  # Keep last 5
+                        if isinstance(msg, dict):
+                            context_snippets.append(msg)
+                        elif isinstance(msg, str):
+                            context_snippets.append({"role": "user", "content": msg})
+                        else:
+                            context_snippets.append(str(msg))
+                else:
+                    context_snippets = [str(conversation_history)]
+        
+        # Build LLM request with context
         llm_request = LLMIntentRequest(
             user_input=query,
-            rule_intent=context.get("possible_intents", {}),
-            action_code=None,
-            top_confidence=0.0,
-            next_best_confidence=0.0,
-            is_fallback=True
+            rule_intent=rule_intent or context.get("possible_intents", {}),
+            action_code=rule_intent,
+            top_confidence=float(top_confidence),
+            next_best_confidence=float(next_best_confidence),
+            is_fallback=True,
+            context_snippets=context_snippets,
+            metadata={
+                "user_id": user_id,
+                "session_id": session_id,
+                **(context if isinstance(context, dict) else {}),
+                **(message.get("metadata", {}) if isinstance(message.get("metadata"), dict) else {})
+            }
         )
         
         # Process with LLM
@@ -131,7 +222,7 @@ def llm_worker(poll_interval: int = 5, max_iterations: Optional[int] = None):
                 message_id = message.get("message_id", "unknown")
                 logger.info(f"📨 Processing message: {message_id} | Query: '{message.get('query', '')}'")
                 
-                # Update status to PROCESSING (TASK-16)
+                # Update status to PROCESSING
                 if STATUS_STORE_AVAILABLE and status_store:
                     try:
                         status_store.update_status(message_id, "PROCESSING")
@@ -142,7 +233,7 @@ def llm_worker(poll_interval: int = 5, max_iterations: Optional[int] = None):
                 result = process_message(message)
                 
                 if result:
-                    # Apply confidence calibration (TASK-17)
+                    # Apply confidence calibration
                     original_confidence = result.get("confidence", 0.0)
                     calibrated_confidence = original_confidence
                     
@@ -167,7 +258,7 @@ def llm_worker(poll_interval: int = 5, max_iterations: Optional[int] = None):
                     except Exception as e:
                         logger.warning(f"⚠️ Confidence calibration failed: {e}")
                     
-                    # Update status to COMPLETED (TASK-16)
+                    # Update status to COMPLETED
                     if STATUS_STORE_AVAILABLE and status_store:
                         try:
                             result_schema = ResultSchema(
@@ -189,7 +280,7 @@ def llm_worker(poll_interval: int = 5, max_iterations: Optional[int] = None):
                     if not success:
                         logger.warning(f"⚠️ Failed to enqueue result for {message_id}")
                 else:
-                    # Processing failed, update status to FAILED (TASK-16)
+                    # Processing failed, update status to FAILED
                     if STATUS_STORE_AVAILABLE and status_store:
                         try:
                             error = {"type": "LLM_PROCESSING_ERROR", "message": "LLM processing failed"}

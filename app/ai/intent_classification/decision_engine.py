@@ -192,7 +192,7 @@ class DecisionEngine:
             # Deterministic selection on low-confidence: pick top blended action
             print(f"⚠ Blended result is NOT confident. Reason: {reason}")
             
-            # Try queue-based async processing for ambiguous queries (CNS-21)
+            # Try queue-based async processing for ambiguous queries
             # Enabled by default for main endpoint
             # To disable queue: set ENABLE_LLM_QUEUE=false in environment
             enable_queue = os.getenv("ENABLE_LLM_QUEUE", "true").lower() == "true"

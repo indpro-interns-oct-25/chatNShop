@@ -1,8 +1,8 @@
 """
-Queue Management API Endpoints (CNS-21)
+Queue Management API Endpoints
 
 Provides endpoints for monitoring and managing the queue infrastructure.
-Includes status tracking endpoints (TASK-16).
+Includes status tracking endpoints.
 """
 
 from fastapi import APIRouter, HTTPException
@@ -20,7 +20,7 @@ except ImportError:
     queue_monitor = None
     QUEUE_ENABLED = False
 
-# Import status store (TASK-16)
+# Import status store
 try:
     from app.core.status_store import status_store
     STATUS_STORE_AVAILABLE = True
@@ -117,7 +117,7 @@ async def clear_queue(queue_name: str) -> Dict[str, Any]:
 @router.get("/status/{request_id}")
 async def get_request_status(request_id: str) -> Dict[str, Any]:
     """
-    Get status of a classification request (TASK-16).
+    Get status of a classification request.
     
     Returns request status with timestamps and result (if completed).
     Fast lookup (<10ms p95).

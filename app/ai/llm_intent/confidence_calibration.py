@@ -1,5 +1,5 @@
 """
-Confidence Calibration System (TASK-17)
+Confidence Calibration System
 
 Tracks historical accuracy vs. reported confidence and adjusts scores accordingly.
 Implements calibration logic, threshold adjustment, and fallback for low-confidence responses.

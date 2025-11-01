@@ -12,7 +12,10 @@ from .fallback_manager import build_fallback_response
 from .openai_client import OpenAIClient
 from .response_parser import LLMIntentResponse as ParsedLLMResponse, parse_llm_response
 from .prompt_loader import PromptLoader, PromptLoadError, get_prompt_loader
+from .context_collector import get_context_collector
+from .context_summarizer import get_context_summarizer
 import logging
+import os
 
 logger = logging.getLogger("request_handler")
 
@@ -42,6 +45,17 @@ class RequestHandler:
                 f"LLM requests will use simple user messages without prompts."
             )
             self.prompt_loader = None
+        
+        # Initialize context collector and summarizer
+        self.context_collector = get_context_collector()
+        
+        # Get token limit from environment or use default
+        context_token_limit = int(os.getenv("CONTEXT_TOKEN_LIMIT", "2000"))
+        self.context_summarizer = get_context_summarizer(max_tokens=context_token_limit)
+        
+        # Configuration
+        self.enable_context = os.getenv("ENABLE_SESSION_CONTEXT", "true").lower() == "true"
+        self.context_history_limit = int(os.getenv("CONTEXT_HISTORY_LIMIT", "5"))
 
     def handle(self, payload: LLMIntentRequest) -> Dict[str, Any]:
         """Process an intent request and return a normalized response payload."""
@@ -187,6 +201,7 @@ class RequestHandler:
         
         Uses system prompt and few-shot examples if available, otherwise
         falls back to simple user message.
+        Enhances with context if available.
         
         Args:
             payload: LLM intent request payload
@@ -194,25 +209,73 @@ class RequestHandler:
         Returns:
             List of message dictionaries with 'role' and 'content' keys
         """
+        # Collect and enhance context
+        context = None
+        if self.enable_context:
+            try:
+                # Extract user_id and session_id from metadata or context_snippets
+                user_id = payload.metadata.get("user_id") if payload.metadata else None
+                session_id = payload.metadata.get("session_id") if payload.metadata else None
+                
+                # Collect conversation history from context_snippets or metadata
+                conversation_history = []
+                if payload.context_snippets:
+                    # Convert context_snippets to conversation history format
+                    conversation_history = [
+                        {"role": "user", "content": snippet} if isinstance(snippet, str)
+                        else snippet
+                        for snippet in payload.context_snippets
+                    ]
+                
+                # Collect all context
+                raw_context = self.context_collector.collect_all_context(
+                    conversation_history=conversation_history,
+                    user_id=user_id,
+                    session_id=session_id,
+                    history_limit=self.context_history_limit
+                )
+                
+                # Summarize to fit token limit
+                context = self.context_summarizer.truncate_context(raw_context)
+                
+                logger.debug(f"Enhanced prompt with context: {len(context.get('conversation_history', []))} messages")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to collect/enhance context: {e}")
+                context = None
+        
         if self.prompt_loader is not None:
             try:
-                # Production mode: use system prompt + few-shot examples
-                messages = self.prompt_loader.build_messages(payload.user_input)
+                # Production mode: use system prompt + few-shot examples + context
+                messages = self.prompt_loader.build_messages(
+                    user_query=payload.user_input,
+                    context=context
+                )
                 logger.debug(
-                    f"Built messages with system prompt and {len(self.prompt_loader.few_shot_examples)} "
-                    f"few-shot examples (version: {self.prompt_loader.version})"
+                    f"Built messages with system prompt, {len(self.prompt_loader.few_shot_examples)} "
+                    f"few-shot examples, and context (version: {self.prompt_loader.version})"
                 )
                 return messages
             except (PromptLoadError, Exception) as e:
                 logger.warning(
                     f"Failed to use prompts, falling back to simple message: {e}"
                 )
-                # Fallback to simple message if prompt loading fails
+                # Fallback to simple message with context if available
+                if context and self.prompt_loader:
+                    formatted_context = self.prompt_loader.format_context(context)
+                    if formatted_context:
+                        content = f"{formatted_context}\n\n## Current Query:\n{payload.user_input}"
+                        return [{"role": "user", "content": content}]
                 return [
                     {"role": "user", "content": payload.user_input}
                 ]
         else:
-            # Fallback mode: simple user message only
+            # Fallback mode: simple user message with context if available
+            if context and self.prompt_loader:
+                formatted_context = self.prompt_loader.format_context(context)
+                if formatted_context:
+                    content = f"{formatted_context}\n\n## Current Query:\n{payload.user_input}"
+                    return [{"role": "user", "content": content}]
+            
             logger.debug("Using simple user message (prompts not available)")
             return [
                 {"role": "user", "content": payload.user_input}

@@ -1,5 +1,5 @@
 """
-Queue Monitoring (CNS-21)
+Queue Monitoring
 
 Provides metrics and monitoring for queue infrastructure.
 """

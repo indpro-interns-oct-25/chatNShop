@@ -26,9 +26,9 @@ class LLMIntentRequest(BaseModel):
     is_fallback: bool = Field(
         False, description="Whether the rule-based flow already emitted a fallback response."
     )
-    context_snippets: List[str] = Field(
+    context_snippets: List[Any] = Field(
         default_factory=list,
-        description="Optional contextual snippets (conversation history, metadata, etc.).",
+        description="Optional contextual snippets (conversation history, metadata, etc.). Can be strings or dicts with role/content.",
     )
     metadata: Dict[str, Any] = Field(
         default_factory=dict,

@@ -147,7 +147,7 @@ class RedisStatusStore:
         
         Sets TTL based on status:
         - QUEUED/PROCESSING: 24 hours
-        - COMPLETED/FAILED: 1 hour (as per TASK-16 requirement)
+        - COMPLETED/FAILED: 1 hour
         """
         if not self._is_available():
             return self._fallback_store.save(status)
@@ -168,7 +168,7 @@ class RedisStatusStore:
             
             # Set TTL based on status (1 hour for completed/failed, 24 hours for others)
             if status.status in ["COMPLETED", "FAILED"]:
-                ttl = 3600  # 1 hour as per TASK-16 requirement
+                ttl = 3600  # 1 hour
             else:
                 ttl = 86400  # 24 hours for queued/processing
             
@@ -183,7 +183,7 @@ class RedisStatusStore:
     def get(self, request_id: str) -> Optional[RequestStatus]:
         """
         Retrieve a RequestStatus by ID from Redis.
-        Fast lookup (<10ms p95 as per TASK-16 requirement).
+        Fast lookup (<10ms p95).
         """
         if not self._is_available():
             return self._fallback_store.get(request_id)

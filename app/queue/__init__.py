@@ -1,8 +1,8 @@
 """
-Queue Infrastructure Module (CNS-21)
+Queue Infrastructure Module
 
 Provides message queue infrastructure for asynchronous LLM intent classification.
-Handles ambiguous queries from CNS-12 and routes them to LLM processing.
+Handles ambiguous queries from rule-based classifier and routes them to LLM processing.
 """
 
 from .queue_manager import QueueManager

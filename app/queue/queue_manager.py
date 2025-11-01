@@ -1,5 +1,5 @@
 """
-Queue Manager (CNS-21)
+Queue Manager
 
 Manages message queue operations for LLM intent classification.
 Handles input/output queues, dead letter queue, and retry logic.
@@ -20,7 +20,7 @@ class QueueManager:
     Manages Redis-based message queue for asynchronous LLM processing.
     
     Queue Flow:
-    1. Ambiguous queries from CNS-12 → AMBIGUOUS_QUERY_QUEUE
+    1. Ambiguous queries from rule-based classifier → AMBIGUOUS_QUERY_QUEUE
     2. LLM processes queries → CLASSIFICATION_RESULT_QUEUE
     3. Failed messages → DEAD_LETTER_QUEUE
     """
@@ -103,8 +103,8 @@ class QueueManager:
             logger.warning("⚠️ Queue unavailable, cannot enqueue message")
             return None
             
-        # Check if context has a full message (from TASK-15 producer)
-        # This allows preserving the exact TASK-15 message format
+        # Check if context has a full message from producer
+        # This allows preserving the standard message format
         if "_full_message" in context:
             full_message = context["_full_message"]
             message_id = full_message.get("request_id", f"msg_{int(time.time() * 1000)}")

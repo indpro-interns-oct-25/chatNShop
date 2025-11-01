@@ -1,5 +1,5 @@
 """
-Ambiguity Resolver for Intent Classification (CNS-12)
+Ambiguity Resolver for Intent Classification
 
 Handles ambiguous and multi-intent user queries by:
 1. Detecting when user input matches multiple intents (AMBIGUOUS)
@@ -8,8 +8,8 @@ Handles ambiguous and multi-intent user queries by:
 4. Providing fallback behavior
 
 Dependencies:
-- CNS-7: Uses action codes and intent structure from IntentTaxonomy
-- CNS-8: Uses keyword dictionaries that align with CNS-7 action codes
+- Uses action codes and intent structure from IntentTaxonomy
+- Uses keyword dictionaries aligned with action codes
 
 Confidence Thresholds:
 - UNCLEAR_THRESHOLD (0.4): Below this = unclear intent
@@ -39,7 +39,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ✅ Import from CNS-8 (Keyword Dictionaries aligned with CNS-7 action codes)
+# Import keyword dictionaries aligned with action codes
 try:
     from .keywords.loader import load_keywords
     from ..queue_producer import IntentQueueProducer, IntentScore, RuleBasedResult
@@ -65,10 +65,10 @@ LOG_DIR = os.path.abspath(LOG_DIR)
 os.makedirs(LOG_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOG_DIR, "ambiguous.jsonl")
 
-# ------------------ LOAD DATA FROM CNS-8 (aligned with CNS-7) ------------------
-# Load keyword dictionaries from CNS-8
-# Action codes in CNS-8 match CNS-7 IntentTaxonomy action codes
-# (e.g., SEARCH_PRODUCT, ADD_TO_CART as defined in CNS-7)
+# ------------------ LOAD KEYWORD DATA ------------------
+# Load keyword dictionaries
+# Action codes match IntentTaxonomy definitions
+# (e.g., SEARCH_PRODUCT, ADD_TO_CART)
 loaded_keywords = load_keywords()
 
 INTENT_KEYWORDS = {
@@ -87,9 +87,9 @@ def log_ambiguous_case(user_input, intent_scores):
 
 def calculate_confidence(user_input, keywords):
     """
-    Calculate confidence score using keywords from CNS-8.
+    Calculate confidence score using keywords.
     
-    CNS-8 keywords align with CNS-7 action codes as requested by reviewer.
+    Keywords align with action codes from the intent taxonomy.
     
     Args:
         user_input: User's query (lowercase)
@@ -135,8 +135,8 @@ def detect_intent(user_input: str, metadata: Optional[Dict[str, Any]] = None) ->
     """
     Detect user intent with ambiguity resolution.
     
-    Uses CNS-8 keywords that align with CNS-7 action codes (as requested by reviewer).
-    Returns action codes defined in CNS-7 IntentTaxonomy.
+    Uses keywords that align with action codes from the intent taxonomy.
+    Returns action codes defined in IntentTaxonomy.
     
     Uses standardized confidence thresholds:
     - < 0.4 (UNCLEAR_THRESHOLD): Returns UNCLEAR
@@ -152,7 +152,7 @@ def detect_intent(user_input: str, metadata: Optional[Dict[str, Any]] = None) ->
         
     Returns:
         dict: Contains action, confidence, possible_intents and request_id
-        - action: "UNCLEAR", "AMBIGUOUS", or specific CNS-7 action code
+        - action: "UNCLEAR", "AMBIGUOUS", or specific action code
         - confidence: confidence score (if single intent)
         - possible_intents: all detected action codes with scores
         - request_id: tracking ID for queued messages (if applicable)
@@ -161,7 +161,7 @@ def detect_intent(user_input: str, metadata: Optional[Dict[str, Any]] = None) ->
     intent_confidences = {}
     request_id = None
 
-    # Calculate confidence for each CNS-7 action code using CNS-8 keywords
+    # Calculate confidence for each action code using keywords
     for action_code, keywords in INTENT_KEYWORDS.items():
         confidence = calculate_confidence(user_input_lower, keywords)
         if confidence > 0:
@@ -254,7 +254,7 @@ def detect_intent(user_input: str, metadata: Optional[Dict[str, Any]] = None) ->
             "request_id": request_id
         }
 
-    # Case 3: Single clear intent → Return CNS-7 action code
+    # Case 3: Single clear intent → Return action code
     final_action_code = list(high_conf_intents.keys())[0]
     return {
         "action": final_action_code,
@@ -269,8 +269,8 @@ def run_demo():
     """Run an interactive demo of the ambiguity resolver with queue integration."""
     print("Welcome! Type your message to detect intent (type 'exit' to quit).")
 
-    # Print summary of loaded CNS-7 action codes via CNS-8 keywords
-    print(f"\nLoaded {len(INTENT_KEYWORDS)} action codes from CNS-7 (via CNS-8 keywords):")
+    # Print summary of loaded action codes
+    print(f"\nLoaded {len(INTENT_KEYWORDS)} action codes from intent taxonomy:")
     for action_code, keywords in list(INTENT_KEYWORDS.items())[:10]:
         print(f"  - {action_code}: {len(keywords)} keywords")
     if len(INTENT_KEYWORDS) > 10:

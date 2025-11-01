@@ -166,7 +166,57 @@ class PromptLoader:
             raise PromptLoadError("Few-shot examples not loaded")
         return self._few_shot_examples
     
-    def build_messages(self, user_query: str) -> List[Dict[str, str]]:
+    def format_context(self, context: Dict[str, Any]) -> str:
+        """
+        Format context (conversation history + session context) for inclusion in prompt.
+        
+        Args:
+            context: Context dict with conversation_history and session_context
+        
+        Returns:
+            Formatted context string
+        """
+        parts = []
+        
+        # Format conversation history
+        conv_history = context.get("conversation_history", [])
+        if conv_history:
+            parts.append("## Conversation History:")
+            for i, msg in enumerate(conv_history, 1):
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                parts.append(f"{i}. {role.upper()}: {content}")
+        
+        # Format session context
+        session_context = context.get("session_context", {})
+        if session_context:
+            parts.append("\n## User Session Context:")
+            
+            # Cart items
+            cart_items = session_context.get("cart_items", [])
+            if cart_items:
+                items_str = ", ".join(str(item) for item in cart_items[:10])
+                parts.append(f"Cart: {items_str}")
+            
+            # Browsing history
+            browsing_history = session_context.get("browsing_history", [])
+            if browsing_history:
+                history_str = ", ".join(str(item) for item in browsing_history[-5:])
+                parts.append(f"Recently viewed: {history_str}")
+            
+            # Viewed products
+            viewed_products = session_context.get("viewed_products", [])
+            if viewed_products:
+                products_str = ", ".join(str(item) for item in viewed_products[-5:])
+                parts.append(f"Viewed products: {products_str}")
+        
+        return "\n".join(parts) if parts else ""
+    
+    def build_messages(
+        self,
+        user_query: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, str]]:
         """
         Build message array for OpenAI ChatCompletion API.
         
@@ -174,6 +224,7 @@ class PromptLoader:
         
         Args:
             user_query: The actual user query to classify
+            context: Optional context dict (conversation_history, session_context)
             
         Returns:
             List of message dictionaries with 'role' and 'content' keys
@@ -202,10 +253,18 @@ class PromptLoader:
                 "content": assistant_content
             })
         
-        # Add actual user query
+        # Build user query with context
+        user_content = user_query
+        
+        if context:
+            formatted_context = self.format_context(context)
+            if formatted_context:
+                user_content = f"{formatted_context}\n\n## Current Query:\n{user_query}"
+        
+        # Add actual user query with context
         messages.append({
             "role": "user",
-            "content": user_query
+            "content": user_content
         })
         
         return messages

@@ -35,7 +35,7 @@ from qdrant_client import QdrantClient, models
 # Load environment variables
 load_dotenv()
 
-# --- Queue Infrastructure Import (CNS-21) ---
+# --- Queue Infrastructure Import ---
 try:
     from app.queue.queue_manager import queue_manager
     from app.queue.monitor import queue_monitor
@@ -100,7 +100,7 @@ async def lifespan(app: FastAPI):
     """
     print(" Starting Intent Classification API...")
     
-    # --- Initialize Queue Infrastructure (CNS-21) ---
+    # --- Initialize Queue Infrastructure ---
     if QUEUE_AVAILABLE and queue_manager:
         try:
             if queue_manager.health_check():

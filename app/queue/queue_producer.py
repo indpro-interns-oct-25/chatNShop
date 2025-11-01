@@ -1,8 +1,8 @@
 """
-Queue Producer for Ambiguous Queries (TASK-15)
+Queue Producer for Ambiguous Queries
 
 Publishes ambiguous queries from rule-based module to the intent classification queue.
-Adapted from CNS-22 branch to use Redis instead of RabbitMQ.
+Uses Redis for queue management.
 """
 
 import json
@@ -31,7 +31,7 @@ from app.queue.config import queue_config
 
 
 # -----------------------
-# Type definitions (matching TASK-15 spec exactly)
+# Type definitions
 # -----------------------
 class IntentScore(TypedDict):
     intent: str
@@ -45,7 +45,7 @@ class RuleBasedResult(TypedDict, total=False):
 
 
 class QueueMessage(TypedDict):
-    """Message format matching TASK-15 specification exactly."""
+    """Standard message format for queue communication."""
     request_id: str  # UUID v4
     user_query: str
     session_id: Optional[str]
@@ -71,8 +71,8 @@ class IntentQueueProducer:
     """
     Handles publishing of ambiguous queries to the intent classification queue via Redis.
     
-    Adapts CNS-22 RabbitMQ implementation to use Redis while maintaining:
-    - Exact message format from TASK-15 spec
+    Features:
+    - Standard message format for queue communication
     - UUID v4 request_id generation
     - Batching support
     - Idempotency checking
@@ -115,8 +115,6 @@ class IntentQueueProducer:
         """
         Publish an ambiguous query to the intent classification queue.
         
-        Message format matches TASK-15 specification exactly.
-        
         Args:
             query: User's ambiguous query
             rule_based_result: Result from rule-based classifier
@@ -154,7 +152,7 @@ class IntentQueueProducer:
         else:
             priority_str = str(priority) if priority in ["high", "normal"] else "normal"
         
-        # Build message matching TASK-15 spec exactly
+        # Build message with standard format
         message: QueueMessage = {
             "request_id": request_id,
             "user_query": query,
@@ -175,7 +173,7 @@ class IntentQueueProducer:
             # Convert priority string to integer for queue_manager
             priority_int = queue_config.PRIORITY_HIGH if priority_str == "high" else queue_config.PRIORITY_NORMAL
             
-            # Create status in status store (TASK-16 integration)
+            # Create status in status store
             if STATUS_STORE_AVAILABLE and status_store:
                 try:
                     status = RequestStatus(

@@ -1,7 +1,7 @@
 """
-Queue Integration (CNS-21)
+Queue Integration
 
-Integrates queue infrastructure with CNS-12 Ambiguity Resolver.
+Integrates queue infrastructure with Ambiguity Resolver.
 Routes ambiguous/unclear queries to LLM processing queue.
 """
 
@@ -22,7 +22,7 @@ def send_to_llm_queue(
     """
     Send ambiguous/unclear query to LLM processing queue.
     
-    This integrates with CNS-12 ambiguity resolver output.
+    This integrates with the ambiguity resolver output.
     
     Args:
         query: User's original query
@@ -62,7 +62,7 @@ def send_to_llm_queue(
         "confidence_scores": ambiguity_result.get("possible_intents", {}),
         "user_id": user_id,
         "is_premium": is_premium,
-        "source": "CNS-12_ambiguity_resolver"
+        "source": "ambiguity_resolver"
     }
     
     try:
@@ -92,7 +92,7 @@ def send_to_llm_queue(
 
 def get_classification_result(message_id: str, timeout: int = 30) -> Dict[str, Any]:
     """
-    Get LLM classification result from status store (TASK-16 integration).
+    Get LLM classification result from status store.
     
     Uses status store instead of polling output queue for faster lookups.
     
