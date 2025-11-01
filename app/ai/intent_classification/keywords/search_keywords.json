@@ -7,7 +7,9 @@
       "search goods", "find item", "look up product", "product query", "shop for",
       "search catalogue", "search online", "search shop", "search inventory", "find in store",
       "explore products", "discover product", "search merchandise", "product browse", "product hunting",
-      "track product", "product list", "check product availability", "find specific product", "search item details"
+      "track product", "product list", "check product availability", "find specific product", "search item details",
+      "show me", "i want to buy", "i need to find", "get me some", "looking for", "i'm looking for",
+      "where can i find", "do you have", "got any", "check out", "browse"
     ]
   },
   "SEARCH_CATEGORY": {

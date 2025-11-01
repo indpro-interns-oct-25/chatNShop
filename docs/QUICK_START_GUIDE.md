@@ -14,7 +14,7 @@
 ## Prerequisites
 
 ### Required Software
-- **Python 3.12+** - Programming language (3.12 recommended for best performance and compatibility)
+- **Python 3.11.9** - Programming language (3.11.9 recommended for stable ML library support across all platforms)
 - **Docker & Docker Compose** - Container orchestration
 - **Git** - Version control
 
@@ -82,17 +82,17 @@ chatns-redis         Up (healthy)
 
 ### Step 4: Create Python Virtual Environment
 
-**Note**: Python 3.12+ is recommended. If you don't have it installed:
+**Note**: Python 3.11.9 is recommended for stable ML library compatibility. If you don't have it installed:
 ```bash
-# Install Python 3.12 via Homebrew (Mac)
-brew install python@3.12
+# Install Python 3.11 via Homebrew (Mac)
+brew install python@3.11
 
 # Or download from: https://www.python.org/downloads/
 ```
 
 ```bash
-# Create venv with Python 3.12
-python3.12 -m venv venv
+# Create venv with Python 3.11
+python3.11 -m venv venv
 
 # Activate venv
 source venv/bin/activate  # On Mac/Linux
@@ -100,7 +100,7 @@ source venv/bin/activate  # On Mac/Linux
 venv\Scripts\activate     # On Windows
 
 # Verify Python version
-python --version  # Should show Python 3.12.x
+python --version  # Should show Python 3.11.9
 
 # Install dependencies
 pip install --upgrade pip
