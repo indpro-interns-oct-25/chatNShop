@@ -25,12 +25,16 @@ from app.api.testing_framework_api import router as testing_framework_router
 from app.api.feedback_review_ui import router as feedback_review_ui_router
 from app.ai.cost_monitor.scheduler import start_scheduler
 
+# Logging setup
+from app.monitoring.logging_config import setup_logging
+logger = setup_logging()
+
+
 # Qdrant client setup
 from qdrant_client import QdrantClient, models
 
 # Load environment variables
 load_dotenv()
-
 
 # Structured logging with correlation ID and error context
 def log_with_context(level: str, message: str, error: Exception | None = None, context: str | None = None):
@@ -56,7 +60,7 @@ from app.ai.intent_classification.decision_engine import get_intent_classificati
 from app.api.v1.intent import router as intent_router
 
 try:
-    from app.api.v1.queue import router as queue_router
+    from app.api.v1.task_queue import router as queue_router
     QUEUE_ROUTER_AVAILABLE = True
 except ImportError:
     QUEUE_ROUTER_AVAILABLE = False
@@ -71,8 +75,8 @@ print("Successfully imported Decision Engine.")
 
 # Queue Infrastructure Import
 try:
-    from app.queue.queue_manager import queue_manager
-    from app.queue.monitor import queue_monitor
+    from app.task_queue.queue_manager import queue_manager
+    from app.task_queue.monitor import queue_monitor
     QUEUE_AVAILABLE = True
 except Exception as e:
     print(f"⚠️ Queue infrastructure not available: {e}")
@@ -176,9 +180,7 @@ async def lifespan(app: FastAPI):
         print(f"⚠️ Review scheduler failed: {e}")
 
     print("✅ Intent Classification API started successfully!")
-    
     yield
-    
     print("🛑 Shutting down Intent Classification API...")
     print("✅ Shutdown complete.")
 
@@ -193,6 +195,34 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# ---- PROMETHEUS METRICS ----
+from app.monitoring.metrics import get_metrics_asgi_app, REQUEST_COUNT, REQUEST_LATENCY, REQUEST_IN_PROGRESS
+app.mount("/metrics", get_metrics_asgi_app())
+# -----------------------------
+
+# Add this import
+from app.monitoring.http_middleware import PrometheusFastAPIMiddleware
+
+# Register the middleware
+app.add_middleware(PrometheusFastAPIMiddleware)
+
+# ✅ Minimal working middleware (kept below your comment block)
+@app.middleware("http")
+async def prometheus_middleware(request: Request, call_next):
+    method = request.method
+    endpoint = request.url.path
+    REQUEST_IN_PROGRESS.inc()
+    start_time = time.perf_counter()
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        REQUEST_COUNT.labels(method=method, endpoint=endpoint, http_status=status_code).inc()
+        REQUEST_LATENCY.labels(method=method, endpoint=endpoint).observe(time.perf_counter() - start_time)
+        return response
+    finally:
+        REQUEST_IN_PROGRESS.dec()
+
+
 # Middleware
 app.add_middleware(
     CORSMiddleware,
@@ -201,7 +231,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # Root Endpoint
 @app.get("/", tags=["Health"])
@@ -212,7 +241,6 @@ async def root() -> Dict[str, Any]:
         "version": os.getenv("APP_VERSION", "1.0.0"),
         "message": "Hybrid Intent Classification System is running!"
     }
-
 
 # Health Endpoint
 @app.get("/health", tags=["Health"])
@@ -251,11 +279,7 @@ async def health_check() -> Dict[str, Any]:
     return {
         "status": overall_status,
         "timestamp": datetime.utcnow().isoformat() + "Z",
-        "services": {
-            "qdrant": qdrant_status,
-            "redis": redis_status,
-            "openai": openai_status
-        },
+        "services": {"qdrant": qdrant_status, "redis": redis_status, "openai": openai_status},
         "queue": queue_stats,
         "version": os.getenv("APP_VERSION", "1.0.0")
     }
@@ -277,53 +301,7 @@ class ClassificationOutput(BaseModel):
 
 
 # Classification Endpoint
-@app.post(
-    "/classify",
-    tags=["Intent Classification"],
-    response_model=ClassificationOutput,
-    summary="Classify user input into an intent",
-    responses={
-        200: {
-            "description": "Classification result",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "action_code": "SEARCH_PRODUCT",
-                        "confidence_score": 0.92,
-                        "matched_keywords": ["search", "shoes"],
-                        "original_text": "Show me red Nike running shoes under $100",
-                        "status": "LLM_CLASSIFICATION",
-                        "intent": {
-                            "id": "SEARCH_PRODUCT",
-                            "score": 0.92,
-                            "source": "llm",
-                        },
-                        "entities": {
-                            "product_type": "shoes",
-                            "category": "running",
-                            "brand": "Nike",
-                            "color": "red",
-                            "size": None,
-                            "price_range": {"min": None, "max": 100, "currency": "USD"}
-                        }
-                    }
-                }
-            },
-        },
-        500: {
-            "description": "Internal error",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "error": "Classification Failed",
-                        "message": "An internal error occurred while processing the request.",
-                        "detail": "<error details>",
-                    }
-                }
-            },
-        },
-    },
-)
+@app.post("/classify", tags=["Intent Classification"], response_model=ClassificationOutput)
 async def classify_intent(user_input: ClassificationInput) -> ClassificationOutput:
     correlation_id = str(uuid.uuid4())
     print(f"[INFO] [{correlation_id}] Received text: {user_input.text}")
@@ -378,11 +356,7 @@ async def classify_intent(user_input: ClassificationInput) -> ClassificationOutp
             )
         return JSONResponse(
             status_code=500,
-            content={
-                "error": "Classification Failed",
-                "message": "Internal processing error. Please retry.",
-                "error_id": error_id,
-            },
+            content={"error": "Classification Failed", "message": "Internal processing error. Please retry.", "error_id": error_id},
         )
 
 
@@ -424,26 +398,34 @@ async def global_exception_handler(request: Request, exc: Exception):
     error_id = log_with_context("ERROR", f"Unhandled exception at {request.url}", exc)
     return JSONResponse(
         status_code=500,
-        content={
-            "error": "Internal server error",
-            "message": "An unexpected error occurred",
-            "error_id": error_id,
-            "path": str(request.url),
-        },
+        content={"error": "Internal server error", "message": "An unexpected error occurred", "error_id": error_id, "path": str(request.url)},
     )
 
 
 # Entrypoint
 def run():
-    uvicorn.run(
-        "app.main:app",
-        host=os.getenv("HOST", "127.0.0.1"),
-        port=int(os.getenv("PORT", 8000)),
-        reload=False,
-        workers=int(os.getenv("WORKERS", 1)),
-        log_level=os.getenv("LOG_LEVEL", "info").lower()
-    )
+    uvicorn.run("app.main:app", host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", 8000)), reload=False,
+                workers=int(os.getenv("WORKERS", 1)), log_level=os.getenv("LOG_LEVEL", "info").lower())
 
 
 if __name__ == "__main__":
     run()
+
+
+# -------------------------------------------------
+# ✅ Expose Prometheus metrics endpoint properly
+# -------------------------------------------------
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from fastapi.responses import Response
+
+@app.get("/metrics")
+async def prometheus_metrics():
+    """Expose collected Prometheus metrics."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+# -------------------------------------------------
+
+from app.api.v1 import llm_intent_api
+app.include_router(llm_intent_api.router)
+
+from app.monitoring.tracing import init_tracer
+init_tracer("chatnshop-llm-intent")

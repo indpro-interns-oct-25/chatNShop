@@ -4,7 +4,17 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
+# ---------------------------------------------------------------------
+# ✅ Minimal request payload used in basic cases
+# ---------------------------------------------------------------------
+class LLMIntentSimpleRequest(BaseModel):
+    """Minimal request payload: only raw user input."""
+    user_input: str = Field(..., description="Raw user utterance requiring clarification.")
 
+
+# ---------------------------------------------------------------------
+# ✅ Full request payload forwarded from the rule-based pipeline to the LLM
+# ---------------------------------------------------------------------
 class LLMIntentRequest(BaseModel):
     """Request payload forwarded from the rule-based pipeline to the LLM."""
 
@@ -26,7 +36,10 @@ class LLMIntentRequest(BaseModel):
     )
     context_snippets: List[Any] = Field(
         default_factory=list,
-        description="Optional contextual snippets (conversation history, metadata, etc.). Can be strings or dicts with role/content.",
+        description=(
+            "Optional contextual snippets (conversation history, metadata, etc.). "
+            "Can be strings or dicts with role/content."
+        ),
     )
     metadata: Dict[str, Any] = Field(
         default_factory=dict,
@@ -34,6 +47,9 @@ class LLMIntentRequest(BaseModel):
     )
 
 
+# ---------------------------------------------------------------------
+# ✅ Normalized response structure returned by the hybrid classifier
+# ---------------------------------------------------------------------
 class LLMIntentResponse(BaseModel):
     """Normalized response structure returned by the hybrid classifier."""
 
@@ -56,7 +72,26 @@ class LLMIntentResponse(BaseModel):
     )
 
 
-class LLMIntentSimpleRequest(BaseModel):
-    """Minimal request payload: only raw user input."""
+# ---------------------------------------------------------------------
+# ✅ Structured Logging Setup for Sample Query Logging (Step 4)
+# ---------------------------------------------------------------------
+import logging
+from datetime import datetime
+from app.monitoring.logging_config import setup_logging
 
-    user_input: str = Field(..., description="Raw user utterance requiring clarification.")
+setup_logging()
+logger = logging.getLogger("chatnshop")
+
+def log_sample_query(user_query: str, predicted_intent: str, confidence: float, model_response: str):
+    """
+    Logs sample queries and model outputs to logs/sample_queries.jsonl
+    for quality assurance review.
+    """
+    sample = {
+        "user_query": user_query,
+        "predicted_intent": predicted_intent,
+        "confidence": confidence,
+        "model_response": model_response,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+    logger.info(sample)

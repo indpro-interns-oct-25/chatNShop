@@ -17,7 +17,7 @@ from loguru import logger
 # Try to import Redis
 try:
     import redis
-    from app.queue.config import queue_config
+    from app.task_queue.config import queue_config
     REDIS_AVAILABLE = True
 except ImportError:
     redis = None
@@ -53,7 +53,7 @@ class SessionStore:
                 else:
                     # Try to use existing queue_manager's Redis connection
                     try:
-                        from app.queue.queue_manager import queue_manager
+                        from app.task_queue.queue_manager import queue_manager
                         if queue_manager and queue_manager.is_available() and hasattr(queue_manager, 'redis_client'):
                             self.redis_client = queue_manager.redis_client
                         else:

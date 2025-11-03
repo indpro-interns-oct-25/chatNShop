@@ -112,7 +112,7 @@ Query → Normalize → Keyword Match
 
 ### 4. Infrastructure Layer
 
-#### a) Queue System (`app/queue/`)
+#### a) Queue System (`app/task_queue/`)
 **Technology**: Redis-based priority queues
 
 **Components**:

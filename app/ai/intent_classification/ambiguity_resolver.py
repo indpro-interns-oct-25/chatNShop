@@ -42,10 +42,10 @@ logger = logging.getLogger(__name__)
 # Import keyword dictionaries aligned with action codes
 try:
     from .keywords.loader import load_keywords
-    from app.queue.queue_producer import IntentQueueProducer, IntentScore, RuleBasedResult
+    from app.task_queue.queue_producer import IntentQueueProducer, IntentScore, RuleBasedResult
 except ImportError:
     from keywords.loader import load_keywords
-    from app.queue.queue_producer import IntentQueueProducer, IntentScore, RuleBasedResult
+    from app.task_queue.queue_producer import IntentQueueProducer, IntentScore, RuleBasedResult
 
 # Initialize queue producer
 _queue_producer = IntentQueueProducer()

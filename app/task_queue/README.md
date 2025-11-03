@@ -101,7 +101,7 @@ PRIORITY_LOW=10        # Batch processing
 
 ```python
 from app.ai.intent_classification.ambiguity_resolver import detect_intent
-from app.queue.integration import send_to_llm_queue
+from app.task_queue.integration import send_to_llm_queue
 
 # User query
 user_query = "add shoes and track my order"
@@ -126,7 +126,7 @@ else:
 ### 2. Enqueue Message Directly
 
 ```python
-from app.queue.queue_manager import queue_manager
+from app.task_queue.queue_manager import queue_manager
 
 message_id = queue_manager.enqueue_ambiguous_query(
     query="what is this?",
@@ -142,7 +142,7 @@ message_id = queue_manager.enqueue_ambiguous_query(
 ### 3. Dequeue Message (LLM Worker)
 
 ```python
-from app.queue.queue_manager import queue_manager
+from app.task_queue.queue_manager import queue_manager
 
 # Get next message
 message = queue_manager.dequeue_ambiguous_query(timeout=10)
@@ -164,7 +164,7 @@ if message:
 ### 4. Handle Failures with Retry
 
 ```python
-from app.queue.queue_manager import queue_manager
+from app.task_queue.queue_manager import queue_manager
 
 message = queue_manager.dequeue_ambiguous_query()
 
@@ -183,8 +183,8 @@ except Exception as e:
 ### 5. Monitor Queue Health
 
 ```python
-from app.queue.queue_manager import queue_manager
-from app.queue.monitor import queue_monitor
+from app.task_queue.queue_manager import queue_manager
+from app.task_queue.monitor import queue_monitor
 
 # Get queue statistics
 stats = queue_manager.get_queue_stats()
@@ -251,7 +251,7 @@ Lower score = higher priority (processed first)
 ## Health Check
 
 ```python
-from app.queue.queue_manager import queue_manager
+from app.task_queue.queue_manager import queue_manager
 
 if queue_manager.health_check():
     print("✅ Queue system healthy")
@@ -292,8 +292,8 @@ MAX_RETRY_ATTEMPTS=3
 
 Add to `main.py`:
 ```python
-from app.queue.queue_manager import queue_manager
-from app.queue.monitor import queue_monitor
+from app.task_queue.queue_manager import queue_manager
+from app.task_queue.monitor import queue_monitor
 
 @app.on_event("startup")
 async def startup_event():
@@ -319,7 +319,7 @@ async def queue_health():
 
 ```python
 # tests/test_queue.py
-from app.queue.queue_manager import QueueManager
+from app.task_queue.queue_manager import QueueManager
 
 def test_enqueue_dequeue():
     qm = QueueManager()
@@ -340,7 +340,7 @@ def test_enqueue_dequeue():
 
 ```python
 def test_full_flow():
-    from app.queue.integration import send_to_llm_queue
+    from app.task_queue.integration import send_to_llm_queue
     from app.ai.intent_classification.ambiguity_resolver import detect_intent
     
     # Ambiguous query
@@ -410,8 +410,8 @@ Add to FastAPI app:
 
 ```python
 from fastapi import APIRouter
-from app.queue.queue_manager import queue_manager
-from app.queue.monitor import queue_monitor
+from app.task_queue.queue_manager import queue_manager
+from app.task_queue.monitor import queue_monitor
 
 router = APIRouter(prefix="/queue", tags=["Queue"])
 

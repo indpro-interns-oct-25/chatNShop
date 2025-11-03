@@ -8,9 +8,9 @@ Routes ambiguous/unclear queries to LLM processing queue.
 from typing import Dict, Any, Optional
 from loguru import logger
 
-from app.queue.queue_manager import queue_manager
-from app.queue.monitor import queue_monitor
-from app.queue.config import queue_config
+from app.task_queue.queue_manager import queue_manager
+from app.task_queue.monitor import queue_monitor
+from app.task_queue.config import queue_config
 
 
 def send_to_llm_queue(
