@@ -127,25 +127,97 @@ class DecisionEngine:
     # ------------------------------------------------------------------
     def search(self, query: str) -> Dict[str, Any]:
         """Executes hybrid search + LLM + cache fallback with resilience."""
+        import time
+        start_time = time.time()
         correlation_id = str(uuid.uuid4())
         logger.info(f"[{correlation_id}] 🔍 Starting intent classification for: '{query}'")
 
-        # 🧹 Clean query text to handle typos like “show ing”
+        # 🧹 Clean query text to handle typos like "show ing"
         query = _clean_text(query)
 
         # ✅ Cache read-through fallback
         if query in self._cache:
             logger.info(f"[{correlation_id}] Cache hit for query '{query}'")
-            return self._cache[query]
+            cache_result = self._cache[query]
+            # Log cache hit and track latency
+            total_latency = (time.time() - start_time) * 1000
+            try:
+                from app.ai.feedback.classification_logger import get_classification_logger
+                from app.ai.monitoring.intent_distribution_tracker import get_intent_distribution_tracker
+                from app.ai.monitoring.confidence_tracker import get_confidence_tracker
+                
+                classification_logger = get_classification_logger()
+                intent_tracker = get_intent_distribution_tracker()
+                confidence_tracker = get_confidence_tracker()
+                
+                action_code = cache_result.get("intent", {}).get("id") or cache_result.get("action_code", "UNKNOWN")
+                confidence = cache_result.get("intent", {}).get("score") or cache_result.get("confidence_score", 0.0)
+                
+                classification_logger.log_cache_hit(
+                    query=query,
+                    action_code=action_code,
+                    confidence=confidence,
+                    request_id=correlation_id,
+                )
+                intent_tracker.record_intent(action_code)
+                confidence_tracker.record_confidence(confidence)
+            except Exception as e:
+                logger.warning(f"Failed to log cache hit: {e}")
+            
+            if total_latency > 3000:
+                logger.warning(f"⚠️ Total pipeline latency {total_latency:.2f}ms exceeds 3s threshold")
+            
+            return cache_result
 
         try:
             # Run hybrid classification
+            rule_based_start = time.time()
             result = self._run_hybrid_search(query)
+            total_latency = (time.time() - start_time) * 1000
+            rule_based_latency = (time.time() - rule_based_start) * 1000
+            
+            # Log handoff and track latency
+            source = result.get("status", "UNKNOWN")
+            action_code = result.get("intent", {}).get("id") if isinstance(result.get("intent"), dict) else result.get("intent", "UNKNOWN")
+            confidence = result.get("intent", {}).get("score") if isinstance(result.get("intent"), dict) else result.get("confidence_score", 0.0)
+            
+            try:
+                from app.ai.feedback.classification_logger import get_classification_logger
+                from app.ai.monitoring.intent_distribution_tracker import get_intent_distribution_tracker
+                from app.ai.monitoring.confidence_tracker import get_confidence_tracker
+                
+                classification_logger = get_classification_logger()
+                intent_tracker = get_intent_distribution_tracker()
+                confidence_tracker = get_confidence_tracker()
+                
+                # Log handoff to LLM queue if applicable
+                if source == "QUEUED_FOR_LLM":
+                    logger.info(f"[{correlation_id}] Handoff: rule-based → LLM queue (latency: {rule_based_latency:.2f}ms)")
+                    # Handoff logging will be done by queue worker
+                elif "CONFIDENT" in source:
+                    classification_logger.log_rule_based_classification(
+                        query=query,
+                        action_code=action_code,
+                        confidence=confidence,
+                        request_id=correlation_id,
+                    )
+                    intent_tracker.record_intent(action_code)
+                    confidence_tracker.record_confidence(confidence)
+                
+                # Track total pipeline latency
+                if total_latency > 3000:
+                    logger.warning(f"⚠️ Total pipeline latency {total_latency:.2f}ms exceeds 3s threshold")
+                else:
+                    logger.info(f"[{correlation_id}] Total pipeline latency: {total_latency:.2f}ms")
+            except Exception as e:
+                logger.warning(f"Failed to log classification/handoff: {e}")
+            
             self._cache[query] = result  # Cache successful result
             return result
 
         except Exception as e:
-            logger.error(f"[{correlation_id}] Hybrid classification failed: {e}", exc_info=True)
+            total_latency = (time.time() - start_time) * 1000
+            logger.error(f"[{correlation_id}] Hybrid classification failed: {e} (latency: {total_latency:.2f}ms)", exc_info=True)
             traceback.print_exc()
 
             # 🔄 LLM fallback (resilient)

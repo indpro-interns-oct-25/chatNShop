@@ -186,6 +186,36 @@ def process_message(message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         queue_monitor.record_dequeue()
         queue_monitor.record_processing_time(processing_time)
         
+        # Log classification and track metrics for feedback system
+        try:
+            from app.ai.feedback.classification_logger import get_classification_logger
+            from app.ai.monitoring.intent_distribution_tracker import get_intent_distribution_tracker
+            from app.ai.monitoring.confidence_tracker import get_confidence_tracker
+            
+            classification_logger = get_classification_logger()
+            intent_tracker = get_intent_distribution_tracker()
+            confidence_tracker = get_confidence_tracker()
+            
+            action_code = result.get("action_code") or result.get("intent", "UNKNOWN")
+            confidence = result.get("confidence", 0.0)
+            
+            # Log handoff: rule-based → LLM queue → LLM result
+            logger.info(f"Handoff complete: queue → LLM (message_id: {message_id}, latency: {processing_time*1000:.2f}ms)")
+            
+            classification_logger.log_llm_classification(
+                query=query,
+                action_code=action_code,
+                confidence=confidence,
+                request_id=message_id,
+                latency_ms=processing_time * 1000,
+                context_snippets=context_snippets,
+            )
+            
+            intent_tracker.record_intent(action_code)
+            confidence_tracker.record_confidence(confidence)
+        except Exception as e:
+            logger.warning(f"Failed to log classification from queue: {e}")
+        
         logger.info(
             f"✅ Processed message {message['message_id']} | "
             f"Intent: {result.get('action_code')} | "

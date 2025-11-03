@@ -1,5 +1,6 @@
 # ChatNShop Intent Classification API
-FROM python:3.9-slim
+# Using Python 3.11 to match development environment and ML library requirements
+FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app

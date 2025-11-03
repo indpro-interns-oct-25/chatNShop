@@ -30,7 +30,7 @@ class CacheMetrics:
         Args:
             track_top_queries: Number of top queries to track (default: 100)
         """
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # Use RLock for reentrant locking (needed for get_summary)
         
         # Hit/miss counters
         self.hits = 0
@@ -65,7 +65,8 @@ class CacheMetrics:
                 self._query_hits[query] = self._query_hits.get(query, 0) + 1
                 
                 # Limit memory usage by keeping only top queries
-                if len(self._query_hits) > self._track_top_queries * 2:
+                # Clean up whenever we exceed the limit (not just at 2x)
+                if len(self._query_hits) > self._track_top_queries:
                     # Keep top N queries
                     sorted_queries = sorted(
                         self._query_hits.items(),
@@ -182,17 +183,31 @@ class CacheMetrics:
         """
         with self._lock:
             total_requests = self.hits + self.misses
-            uptime = self.get_uptime_seconds()
+            uptime = self.get_uptime_seconds()  # This doesn't need lock, so it's safe
+            
+            # Calculate hit rate inline to avoid nested lock acquisition
+            hit_rate = (self.hits / total_requests * 100) if total_requests > 0 else 0.0
+            miss_rate = 100.0 - hit_rate
+            
+            # Calculate avg latency inline
+            avg_latency = (sum(self._latencies) / len(self._latencies)) if self._latencies else 0.0
+            
+            # Calculate P95 latency inline
+            p95_latency = 0.0
+            if self._latencies:
+                sorted_latencies = sorted(self._latencies)
+                index = int(len(sorted_latencies) * 0.95)
+                p95_latency = sorted_latencies[index] if index < len(sorted_latencies) else 0.0
             
             return {
-                "hit_rate_percent": round(self.get_hit_rate(), 2),
-                "miss_rate_percent": round(self.get_miss_rate(), 2),
+                "hit_rate_percent": round(hit_rate, 2),
+                "miss_rate_percent": round(miss_rate, 2),
                 "total_requests": total_requests,
                 "cache_hits": self.hits,
                 "cache_misses": self.misses,
                 "api_calls_saved": self.hits,
-                "avg_latency_ms": round(self.get_avg_latency(), 2),
-                "p95_latency_ms": round(self.get_p95_latency(), 2),
+                "avg_latency_ms": round(avg_latency, 2),
+                "p95_latency_ms": round(p95_latency, 2),
                 "uptime_seconds": round(uptime, 2),
                 "uptime_hours": round(uptime / 3600, 2),
                 "requests_per_hour": round((total_requests / uptime * 3600), 2) if uptime > 0 else 0.0,

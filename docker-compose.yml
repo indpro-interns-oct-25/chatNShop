@@ -16,9 +16,12 @@ services:
       QDRANT__SERVICE__API_KEY: mykey@123
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/ready"]
+      # Use bash TCP check since curl is not available in Qdrant container
+      # Checks if port 6333 is open and Qdrant is accepting connections
+      # Note: This checks connectivity, not API functionality (API key still required for API calls)
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/6333 && exec 3<&- || exit 1"]
       interval: 10s
-      timeout: 5s
+      timeout: 3s
       retries: 5
       start_period: 10s
 
@@ -62,7 +65,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 20s
       timeout: 10s
       retries: 3

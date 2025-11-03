@@ -254,6 +254,41 @@ class RequestHandler:
                 f"confidence={parsed.confidence}, entities={'present' if entities else 'none'}"
             )
             
+            # Log classification for feedback system
+            try:
+                from app.ai.feedback.classification_logger import get_classification_logger
+                from app.ai.monitoring.intent_distribution_tracker import get_intent_distribution_tracker
+                from app.ai.monitoring.confidence_tracker import get_confidence_tracker
+                
+                classification_logger = get_classification_logger()
+                intent_tracker = get_intent_distribution_tracker()
+                confidence_tracker = get_confidence_tracker()
+                
+                # Get request_id from metadata if available
+                request_id = request.metadata.get("request_id") if request.metadata else None
+                
+                # Log LLM classification
+                classification_logger.log_llm_classification(
+                    query=request.user_input,
+                    action_code=parsed.action_code,
+                    confidence=parsed.confidence,
+                    request_id=request_id,
+                    prompt_version=self.prompt_loader.version if self.prompt_loader else None,
+                    tokens_used=result.get("usage", {}).get("total_tokens") if "usage" in result else None,
+                    latency_ms=result.get("latency_ms"),
+                    context_snippets=request.context_snippets,
+                    entities=entities,
+                    reasoning=parsed.reasoning,
+                )
+                
+                # Track intent distribution
+                intent_tracker.record_intent(parsed.action_code)
+                
+                # Track confidence distribution
+                confidence_tracker.record_confidence(parsed.confidence)
+            except Exception as e:
+                logger.warning(f"Failed to log classification: {e}")
+            
             return {
                 "triggered": True,
                 "intent": parsed.intent,

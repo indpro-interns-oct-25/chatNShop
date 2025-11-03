@@ -22,6 +22,7 @@ from app.api.cost_dashboard_api import router as cost_dashboard_router
 from app.api.cost_dashboard_ui import router as cost_dashboard_ui_router
 from app.api.ab_testing_api import router as ab_testing_router
 from app.api.testing_framework_api import router as testing_framework_router
+from app.api.feedback_review_ui import router as feedback_review_ui_router
 from app.ai.cost_monitor.scheduler import start_scheduler
 
 # Qdrant client setup
@@ -164,6 +165,15 @@ async def lifespan(app: FastAPI):
         print("✅ Cost monitoring scheduler initialized.")
     except Exception as e:
         print(f"⚠️ Scheduler init failed: {e}")
+    
+    # Initialize Review Scheduler (for weekly/monthly reports)
+    try:
+        from app.ai.feedback.review_scheduler import start_review_scheduler
+        review_scheduler = start_review_scheduler()
+        if review_scheduler:
+            print("✅ Review scheduler initialized.")
+    except Exception as e:
+        print(f"⚠️ Review scheduler failed: {e}")
 
     print("✅ Intent Classification API started successfully!")
     
@@ -330,6 +340,19 @@ async def classify_intent(user_input: ClassificationInput) -> ClassificationOutp
         if matched_kw:
             result.setdefault("matched_keywords", [matched_kw])
         result["original_text"] = user_input.text
+        
+        # Track intent distribution and confidence (classification logging is done in decision_engine)
+        try:
+            from app.ai.monitoring.intent_distribution_tracker import get_intent_distribution_tracker
+            from app.ai.monitoring.confidence_tracker import get_confidence_tracker
+            
+            intent_tracker = get_intent_distribution_tracker()
+            confidence_tracker = get_confidence_tracker()
+            
+            intent_tracker.record_intent(result["action_code"])
+            confidence_tracker.record_confidence(float(result["confidence_score"]))
+        except Exception:
+            pass  # Non-critical, continue
 
         return ClassificationOutput(
             action_code=result["action_code"],
@@ -382,6 +405,17 @@ if CACHE_ROUTER_AVAILABLE:
         app.include_router(cache_router, prefix="/api/v1")
     except Exception as e:
         print(f"⚠️ Failed to include cache router: {e}")
+
+# Include feedback and monitoring routers
+try:
+    from app.api.v1.feedback import router as feedback_router
+    from app.api.v1.monitoring import router as monitoring_router
+    app.include_router(feedback_router, prefix="/api/v1")
+    app.include_router(monitoring_router, prefix="/api/v1")
+    app.include_router(feedback_review_ui_router)
+    print("✅ Feedback and monitoring routers registered")
+except Exception as e:
+    print(f"⚠️ Failed to include feedback/monitoring routers: {e}")
 
 
 # Global Exception Handler

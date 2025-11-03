@@ -373,10 +373,14 @@ class LLMResponseCache:
                         continue
                     
                     cached_entry = json.loads(cached_data)
-                    cached_embedding = np.array(cached_entry['embedding'])
+                    # Ensure consistent dtype (float32) to avoid dtype mismatch errors
+                    cached_embedding = np.array(cached_entry['embedding'], dtype=np.float32)
+                    
+                    # Ensure query embedding is also float32
+                    query_emb = query_embedding.astype(np.float32) if query_embedding.dtype != np.float32 else query_embedding
                     
                     # Compute cosine similarity
-                    similarity = float(util.cos_sim(query_embedding, cached_embedding).item())
+                    similarity = float(util.cos_sim(query_emb, cached_embedding).item())
                     
                     # Check if above threshold and better than current best
                     if similarity >= self.similarity_threshold and similarity > best_similarity:
@@ -424,10 +428,14 @@ class LLMResponseCache:
         
         for cache_key, cached_entry in self._memory_cache.items():
             try:
-                cached_embedding = np.array(cached_entry['embedding'])
+                # Ensure consistent dtype (float32) to avoid dtype mismatch errors
+                cached_embedding = np.array(cached_entry['embedding'], dtype=np.float32)
+                
+                # Ensure query embedding is also float32
+                query_emb = query_embedding.astype(np.float32) if query_embedding.dtype != np.float32 else query_embedding
                 
                 # Compute cosine similarity
-                similarity = float(util.cos_sim(query_embedding, cached_embedding).item())
+                similarity = float(util.cos_sim(query_emb, cached_embedding).item())
                 
                 # Check if above threshold and better than current best
                 if similarity >= self.similarity_threshold and similarity > best_similarity:

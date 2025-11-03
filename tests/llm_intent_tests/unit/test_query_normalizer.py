@@ -77,9 +77,9 @@ class TestQueryNormalizer:
         assert self.normalizer.normalize(query) == expected
     
     def test_preserve_apostrophes(self):
-        """Test that apostrophes are preserved."""
+        """Test that apostrophes are preserved in contractions."""
         query = "I'm looking for shoes"
-        expected = "im looking for shoes"
+        expected = "i'm looking for shoes"  # Apostrophes preserved for better semantic matching
         assert self.normalizer.normalize(query) == expected
     
     def test_is_cacheable_valid(self):
