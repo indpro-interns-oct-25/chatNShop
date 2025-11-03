@@ -13,7 +13,7 @@ services:
       QDRANT__STORAGE__STORAGE_PATH: /qdrant/storage
       QDRANT__SERVICE__HTTP_PORT: 6333
       QDRANT__SERVICE__GRPC_PORT: 6334
-      QDRANT__SERVICE__API_KEY: mykey@123
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY}
     restart: unless-stopped
     healthcheck:
       # Use bash TCP check since curl is not available in Qdrant container
