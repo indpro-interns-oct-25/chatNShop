@@ -59,8 +59,6 @@ services:
       - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.3}
       - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-400}
     depends_on:
-      qdrant:
-        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
