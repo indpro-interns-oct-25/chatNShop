@@ -15,8 +15,8 @@ router = APIRouter(prefix="/queue", tags=["Queue"])
 
 # Import queue components
 try:
-    from app.queue.queue_manager import queue_manager
-    from app.queue.monitor import queue_monitor
+    from app.task_queue.queue_manager import queue_manager
+    from app.task_queue.monitor import queue_monitor
     QUEUE_ENABLED = True
 except ImportError:
     queue_manager = None

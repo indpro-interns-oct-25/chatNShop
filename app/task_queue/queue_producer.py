@@ -16,7 +16,7 @@ from loguru import logger
 
 # Import queue manager and status store
 try:
-    from app.queue.queue_manager import queue_manager
+    from app.task_queue.queue_manager import queue_manager
     from app.core.status_store import status_store
     from app.schemas.request_status import RequestStatus
     QUEUE_AVAILABLE = True
@@ -27,7 +27,7 @@ except ImportError:
     QUEUE_AVAILABLE = False
     STATUS_STORE_AVAILABLE = False
 
-from app.queue.config import queue_config
+from app.task_queue.config import queue_config
 
 
 # -----------------------

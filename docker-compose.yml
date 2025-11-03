@@ -1,6 +1,9 @@
 version: "3.9"
 
 services:
+  # ==============================
+  # Qdrant Vector Database
+  # ==============================
   qdrant:
     image: qdrant/qdrant:latest
     container_name: chatnshop-qdrant
@@ -25,6 +28,9 @@ services:
       retries: 5
       start_period: 10s
 
+  # ==============================
+  # Redis Cache
+  # ==============================
   redis:
     image: redis:7-alpine
     container_name: chatns-redis
@@ -41,6 +47,9 @@ services:
       retries: 5
       start_period: 5s
 
+  # ==============================
+  # FastAPI Intent Classifier API
+  # ==============================
   intent-api:
     build: .
     container_name: chatnshop-intent-api
@@ -68,6 +77,38 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # ==============================
+  # Prometheus (Metrics Collector)
+  # ==============================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: chatnshop-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./app/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    restart: unless-stopped
+    depends_on:
+      - intent-api
+
+  # ==============================
+  # Grafana (Metrics Dashboard)
+  # ==============================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: chatnshop-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    restart: unless-stopped
 
 # ==============================
 # Persistent Storage
