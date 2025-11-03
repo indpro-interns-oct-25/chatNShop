@@ -10,11 +10,12 @@ from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional, List
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 import uvicorn
+from loguru import logger
 
 # Routers
 from app.status_api import router as status_router
@@ -31,27 +32,62 @@ from qdrant_client import QdrantClient, models
 # Load environment variables
 load_dotenv()
 
+# Validate environment variables at startup
+from app.core.env_validator import validate_environment
+try:
+    env_settings = validate_environment()
+except SystemExit:
+    raise  # Re-raise to prevent startup
+except Exception as e:
+    logger.error(f"Failed to validate environment: {e}")
+    raise SystemExit(1)
+
+# Configure loguru
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+LOG_DIR = os.getenv("LOG_DIR", "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Remove default handler and add custom ones
+logger.remove()
+logger.add(
+    os.path.join(LOG_DIR, "app.log"),
+    rotation="100 MB",
+    retention="30 days",
+    level=LOG_LEVEL,
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
+    enqueue=True,  # Thread-safe logging
+)
+logger.add(
+    lambda msg: print(msg, end=""),
+    level=LOG_LEVEL,
+    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | <level>{message}</level>",
+    colorize=True,
+)
+
 
 # Structured logging with correlation ID and error context
 def log_with_context(level: str, message: str, error: Exception | None = None, context: str | None = None):
     correlation_id = str(uuid.uuid4())
-    base_log = f"[{level}] [{correlation_id}] {message}"
+    extra_context = {"correlation_id": correlation_id}
+    if context:
+        extra_context["context"] = context
+    
     if error:
-        stack = traceback.format_exc()
-        print(f"{base_log}\nError: {error}\nStack Trace:\n{stack}")
+        logger.bind(**extra_context).error(
+            message,
+            exc_info=error
+        )
     else:
-        print(base_log)
+        log_method = getattr(logger.bind(**extra_context), level.lower(), logger.info)
+        log_method(message)
     return correlation_id
 
 
-# Import resilient OpenAI client
-try:
-    from app.core.resilient_openai_client import resilient_client
-except Exception:
-    resilient_client = None
+# Note: Real ResilientOpenAIClient is in app.ai.llm_intent.resilient_openai_client
+# and is used via RequestHandler for proper LLM calls
 
 # Import decision engine and routers
-print("Attempting to import Decision Engine...")
+logger.info("Attempting to import Decision Engine...")
 from app.ai.intent_classification.decision_engine import get_intent_classification
 from app.api.v1.intent import router as intent_router
 
@@ -67,7 +103,7 @@ try:
 except ImportError:
     CACHE_ROUTER_AVAILABLE = False
 
-print("Successfully imported Decision Engine.")
+logger.info("Successfully imported Decision Engine.")
 
 # Queue Infrastructure Import
 try:
@@ -75,7 +111,7 @@ try:
     from app.queue.monitor import queue_monitor
     QUEUE_AVAILABLE = True
 except Exception as e:
-    print(f"⚠️ Queue infrastructure not available: {e}")
+    logger.warning(f"Queue infrastructure not available: {e}")
     queue_manager = None
     queue_monitor = None
     QUEUE_AVAILABLE = False
@@ -93,7 +129,7 @@ if not QDRANT_URL or QDRANT_URL == "http://localhost:6333":
     QDRANT_URL = f"http://{QDRANT_HOST}:{QDRANT_PORT}"
 
 # Initialize Qdrant Client with Retry Logic
-print(f"Attempting to connect to Qdrant at {QDRANT_URL}...")
+logger.info(f"Attempting to connect to Qdrant at {QDRANT_URL}...")
 qdrant_client = None
 retries = 5
 wait_time = 3
@@ -105,82 +141,112 @@ for i in range(retries):
         else:
             qdrant_client = QdrantClient(url=QDRANT_URL, timeout=10)
         qdrant_client.get_collections()
-        print(f"✅ Connected to Qdrant at {QDRANT_URL}")
+        logger.info(f"Connected to Qdrant at {QDRANT_URL}")
         break
     except Exception as e:
-        print(f"Attempt {i + 1} failed: Could not connect to Qdrant. Error: {e}")
+        logger.warning(f"Attempt {i + 1} failed: Could not connect to Qdrant. Error: {e}")
         if i < retries - 1:
-            print(f"Retrying in {wait_time} seconds...")
+            logger.info(f"Retrying in {wait_time} seconds...")
             time.sleep(wait_time)
         else:
-            print(f"❌ FAILED to initialize Qdrant client after {retries} attempts.")
+            logger.error(f"FAILED to initialize Qdrant client after {retries} attempts.")
 
 
 # Lifespan hook (app startup/shutdown)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown manager."""
-    print("🚀 Starting Intent Classification API...")
+    logger.info("Starting Intent Classification API...")
 
     # Initialize Queue Infrastructure
     if QUEUE_AVAILABLE and queue_manager:
         try:
             if queue_manager.health_check():
-                print("✅ Queue infrastructure ready (Redis connected)")
+                logger.info("Queue infrastructure ready (Redis connected)")
             else:
-                print("⚠️ Queue infrastructure available but Redis not connected")
+                logger.warning("Queue infrastructure available but Redis not connected")
         except Exception as e:
-            print(f"⚠️ Queue health check failed: {e}")
+            logger.warning(f"Queue health check failed: {e}")
     else:
-        print("⚠️ Queue infrastructure not available (continuing without async processing)")
+        logger.warning("Queue infrastructure not available (continuing without async processing)")
 
+    # Validate configuration files
+    try:
+        from app.core.config_manager import CONFIG_CACHE, load_all_configs
+        load_all_configs()
+        if "rules" in CONFIG_CACHE:
+            logger.info("✅ Configuration files validated and loaded")
+        else:
+            logger.warning("⚠️  Configuration file 'rules.json' not found - using defaults")
+    except Exception as e:
+        logger.warning(f"Configuration validation warning: {e} - continuing with defaults")
+    
     # Model Warmup - Warm up Decision Engine (load models)
     try:
         get_intent_classification("warm up")
-        print("✅ Models loaded and Decision Engine is warm.")
+        logger.info("Models loaded and Decision Engine is warm.")
     except Exception as e:
-        print(f"❌ ERROR during model warmup: {e}")
+        logger.error(f"ERROR during model warmup: {e}")
         log_with_context("ERROR", "Model warmup failed", e)
+        # Don't fail startup if model warmup fails - might be recoverable
 
     # Verify or create Qdrant collection
     if qdrant_client:
         try:
-            qdrant_client.create_collection(
-                collection_name=PRODUCT_COLLECTION_NAME,
-                vectors_config=models.VectorParams(size=VECTOR_SIZE, distance=models.Distance.COSINE)
-            )
-            print(f"✅ Qdrant collection '{PRODUCT_COLLECTION_NAME}' created.")
-        except Exception as e:
-            if "already exists" in str(e).lower():
-                print(f"ℹ️ Qdrant collection '{PRODUCT_COLLECTION_NAME}' already exists.")
+            # Check if collection exists
+            collections = qdrant_client.get_collections()
+            collection_names = [c.name for c in collections.collections]
+            
+            if PRODUCT_COLLECTION_NAME not in collection_names:
+                qdrant_client.create_collection(
+                    collection_name=PRODUCT_COLLECTION_NAME,
+                    vectors_config=models.VectorParams(size=VECTOR_SIZE, distance=models.Distance.COSINE)
+                )
+                logger.info(f"✅ Qdrant collection '{PRODUCT_COLLECTION_NAME}' created.")
             else:
-                print(f"❌ Could not create/verify Qdrant collection: {e}")
-                log_with_context("ERROR", "Could not create/verify Qdrant collection", e)
+                logger.info(f"✅ Qdrant collection '{PRODUCT_COLLECTION_NAME}' exists and is accessible.")
+        except Exception as e:
+            logger.error(f"❌ Could not create/verify Qdrant collection: {e}")
+            log_with_context("ERROR", "Could not create/verify Qdrant collection", e)
+            # Don't fail startup - might be recoverable
     else:
-        print("⚠️ Qdrant client not initialized, skipping collection creation.")
+        logger.warning("⚠️  Qdrant client not initialized, skipping collection creation.")
 
     # Initialize Cost Monitoring Scheduler
     try:
         start_scheduler()
-        print("✅ Cost monitoring scheduler initialized.")
+        logger.info("Cost monitoring scheduler initialized.")
     except Exception as e:
-        print(f"⚠️ Scheduler init failed: {e}")
+        logger.warning(f"Scheduler init failed: {e}")
     
     # Initialize Review Scheduler (for weekly/monthly reports)
     try:
         from app.ai.feedback.review_scheduler import start_review_scheduler
         review_scheduler = start_review_scheduler()
         if review_scheduler:
-            print("✅ Review scheduler initialized.")
+            logger.info("Review scheduler initialized.")
     except Exception as e:
-        print(f"⚠️ Review scheduler failed: {e}")
+        logger.warning(f"Review scheduler failed: {e}")
 
-    print("✅ Intent Classification API started successfully!")
+    logger.info("Intent Classification API started successfully!")
     
     yield
     
-    print("🛑 Shutting down Intent Classification API...")
-    print("✅ Shutdown complete.")
+    # Graceful shutdown
+    logger.info("Shutting down Intent Classification API...")
+    
+    # Close async Redis connections
+    try:
+        from app.core.async_redis_client import close_async_redis
+        await close_async_redis()
+        logger.info("✅ Async Redis connections closed")
+    except Exception as e:
+        logger.warning(f"Error closing async Redis: {e}")
+    
+    # Close other async resources if needed
+    # Add cleanup for other async clients here
+    
+    logger.info("✅ Shutdown complete.")
 
 
 # FastAPI app setup
@@ -202,6 +268,50 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Import authentication and rate limiting
+from app.core.auth import optional_auth, require_auth, UserContext
+from app.core.rate_limiter import get_rate_limiter, rate_limit_middleware
+
+
+# Request ID and Timing Middleware
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """Add correlation ID to all requests for tracing."""
+    # Get or generate request ID
+    correlation_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    
+    # Add to request state for access in endpoints
+    request.state.correlation_id = correlation_id
+    
+    # Bind logger with correlation ID for this request
+    logger_context = logger.bind(correlation_id=correlation_id)
+    
+    # Log request start
+    start_time = time.time()
+    logger_context.info(f"Request: {request.method} {request.url.path}")
+    
+    try:
+        response = await call_next(request)
+        # Add correlation ID to response headers
+        response.headers["X-Request-ID"] = correlation_id
+        
+        # Log request completion
+        duration_ms = (time.time() - start_time) * 1000
+        logger_context.info(
+            f"Response: {request.method} {request.url.path} - "
+            f"{response.status_code} ({duration_ms:.2f}ms)"
+        )
+        
+        return response
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        logger_context.error(
+            f"Request failed: {request.method} {request.url.path} - "
+            f"{type(e).__name__} ({duration_ms:.2f}ms)",
+            exc_info=e
+        )
+        raise
+
 
 # Root Endpoint
 @app.get("/", tags=["Health"])
@@ -214,7 +324,7 @@ async def root() -> Dict[str, Any]:
     }
 
 
-# Health Endpoint
+# Health Endpoint (Comprehensive)
 @app.get("/health", tags=["Health"])
 async def health_check() -> Dict[str, Any]:
     qdrant_status = "disconnected"
@@ -258,6 +368,61 @@ async def health_check() -> Dict[str, Any]:
         },
         "queue": queue_stats,
         "version": os.getenv("APP_VERSION", "1.0.0")
+    }
+
+
+# Readiness Probe (Kubernetes-style)
+@app.get("/health/readiness", tags=["Health"])
+async def readiness_check() -> Dict[str, Any]:
+    """
+    Readiness probe endpoint.
+    Returns 200 only if all critical dependencies are ready to serve traffic.
+    """
+    checks = {
+        "qdrant": False,
+        "redis": False,
+    }
+    
+    # Check Qdrant
+    if qdrant_client:
+        try:
+            qdrant_client.get_collections()
+            checks["qdrant"] = True
+        except Exception:
+            checks["qdrant"] = False
+    
+    # Check Redis (via queue manager)
+    if QUEUE_AVAILABLE and queue_manager:
+        try:
+            checks["redis"] = queue_manager.health_check()
+        except Exception:
+            checks["redis"] = False
+    
+    # Readiness = all critical services ready
+    is_ready = all(checks.values())
+    
+    status_code = 200 if is_ready else 503
+    
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "ready" if is_ready else "not_ready",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "checks": checks,
+        }
+    )
+
+
+# Liveness Probe (Kubernetes-style)
+@app.get("/health/liveness", tags=["Health"])
+async def liveness_check() -> Dict[str, Any]:
+    """
+    Liveness probe endpoint.
+    Returns 200 if application is running (doesn't check dependencies).
+    """
+    return {
+        "status": "alive",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
     }
 
 
@@ -324,9 +489,19 @@ class ClassificationOutput(BaseModel):
         },
     },
 )
-async def classify_intent(user_input: ClassificationInput) -> ClassificationOutput:
-    correlation_id = str(uuid.uuid4())
-    print(f"[INFO] [{correlation_id}] Received text: {user_input.text}")
+async def classify_intent(
+    user_input: ClassificationInput,
+    request: Request,
+    current_user: UserContext = Depends(optional_auth)
+) -> ClassificationOutput:
+    # Rate limiting (async)
+    limiter = get_rate_limiter()
+    await limiter.check_rate_limit_async(request, current_user.user_id if current_user.is_authenticated else None)
+    
+    # Get correlation ID from middleware (already set)
+    correlation_id = getattr(request.state, "correlation_id", str(uuid.uuid4()))
+    user_id = current_user.user_id if current_user.is_authenticated else "anonymous"
+    logger.bind(correlation_id=correlation_id, user_id=user_id).info(f"Received text: {user_input.text}")
 
     try:
         result = get_intent_classification(user_input.text)
@@ -365,17 +540,6 @@ async def classify_intent(user_input: ClassificationInput) -> ClassificationOutp
         )
     except Exception as e:
         error_id = log_with_context("ERROR", "Classification failed", e, context=user_input.text)
-        if resilient_client:
-            fallback = resilient_client.call(user_input.text)
-            print(f"[WARN] [{error_id}] Using resilient fallback: {fallback}")
-            return ClassificationOutput(
-                action_code=fallback.get("action_code", "UNKNOWN_INTENT"),
-                confidence_score=float(fallback.get("confidence", 0.0)),
-                matched_keywords=[],
-                original_text=user_input.text,
-                status="FALLBACK_LLM",
-                intent=fallback,
-            )
         return JSONResponse(
             status_code=500,
             content={
@@ -398,13 +562,13 @@ if QUEUE_ROUTER_AVAILABLE:
     try:
         app.include_router(queue_router, prefix="/api/v1")
     except Exception as e:
-        print(f"⚠️ Failed to include queue router: {e}")
+        logger.warning(f"Failed to include queue router: {e}")
 
 if CACHE_ROUTER_AVAILABLE:
     try:
         app.include_router(cache_router, prefix="/api/v1")
     except Exception as e:
-        print(f"⚠️ Failed to include cache router: {e}")
+        logger.warning(f"Failed to include cache router: {e}")
 
 # Include feedback and monitoring routers
 try:
@@ -413,9 +577,9 @@ try:
     app.include_router(feedback_router, prefix="/api/v1")
     app.include_router(monitoring_router, prefix="/api/v1")
     app.include_router(feedback_review_ui_router)
-    print("✅ Feedback and monitoring routers registered")
+    logger.info("Feedback and monitoring routers registered")
 except Exception as e:
-    print(f"⚠️ Failed to include feedback/monitoring routers: {e}")
+    logger.warning(f"Failed to include feedback/monitoring routers: {e}")
 
 
 # Global Exception Handler

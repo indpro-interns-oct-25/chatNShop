@@ -25,7 +25,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not OPENAI_API_KEY:
     # Only warn here — some flows run in DRY_RUN and don't require the key.
-    print("⚠️  Warning: OPENAI_API_KEY not found in environment. If DRY_RUN=false you must set it in .env")
+    from loguru import logger
+    logger.warning("OPENAI_API_KEY not found in environment. If DRY_RUN=false you must set it in .env")
 
 # Model names (fallback defaults provided)
 GPT4_MODEL = os.getenv("GPT4_MODEL", os.getenv("OPENAI_MODEL", "gpt-4"))
@@ -62,7 +63,8 @@ def load_json_config(file_path):
         with open(file_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except json.JSONDecodeError as e:
-        print(f"⚠️  Invalid JSON file skipped: {os.path.basename(file_path)} ({e})")
+        from loguru import logger
+        logger.warning(f"Invalid JSON file skipped: {os.path.basename(file_path)} ({e})")
         return None
     except FileNotFoundError:
         return None
@@ -75,7 +77,8 @@ def validate_config(name: str, data: dict) -> bool:
             # expect a rules.rule_sets dict and numeric weights if present
             rule_sets = data.get("rules", {}).get("rule_sets", {})
             if not isinstance(rule_sets, dict) or not rule_sets:
-                print("⚠️ Invalid rules config: missing rules.rule_sets")
+                from loguru import logger
+                logger.warning("Invalid rules config: missing rules.rule_sets")
                 return False
             for variant, cfg in rule_sets.items():
                 if not isinstance(cfg, dict):
@@ -85,12 +88,14 @@ def validate_config(name: str, data: dict) -> bool:
                 if kw is not None and emb is not None:
                     total = float(kw) + float(emb)
                     if abs(total - 1.0) > 1e-6:
-                        print("⚠️ Invalid weights: kw_weight + emb_weight must equal 1.0")
+                        from loguru import logger
+                        logger.warning("Invalid weights: kw_weight + emb_weight must equal 1.0")
                         return False
         # allow other configs unvalidated for now
         return True
     except Exception as e:
-        print(f"⚠️ Config validation error for {name}: {e}")
+        from loguru import logger
+        logger.warning(f"Config validation error for {name}: {e}")
         return False
 
 

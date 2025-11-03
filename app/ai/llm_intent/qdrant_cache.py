@@ -6,16 +6,23 @@ for analytics and debugging.
 """
 
 import time
+import os
 from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct, VectorParams, Distance
+from loguru import logger
 
 # -------------------------------------------------------------
 # Connect to Qdrant
 # -------------------------------------------------------------
 def get_qdrant_client():
     """Initialize and return a Qdrant client connection."""
-    client = QdrantClient(url="http://localhost:6333")
+    qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
+    qdrant_api_key = os.getenv("QDRANT_API_KEY")
+    if qdrant_api_key:
+        client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
+    else:
+        client = QdrantClient(url=qdrant_url)
     return client
 
 
@@ -23,17 +30,17 @@ def get_qdrant_client():
 # Ensure collection exists
 # -------------------------------------------------------------
 def ensure_collection_exists(client: QdrantClient, collection_name: str = "chatnshop_products"):
-    """Creates the Qdrant collection if it doesn’t exist."""
+    """Creates the Qdrant collection if it doesn't exist."""
     collections = [c.name for c in client.get_collections().collections]
     if collection_name not in collections:
-        print(f"⚙️ Creating Qdrant collection '{collection_name}'...")
+        logger.info(f"Creating Qdrant collection '{collection_name}'...")
         client.create_collection(
             collection_name=collection_name,
             vectors_config=VectorParams(size=384, distance=Distance.COSINE)
         )
-        print(f"✅ Collection '{collection_name}' created successfully.")
+        logger.info(f"Collection '{collection_name}' created successfully.")
     else:
-        print(f"✅ Qdrant collection '{collection_name}' already exists.")
+        logger.debug(f"Qdrant collection '{collection_name}' already exists.")
 
 
 # -------------------------------------------------------------
@@ -68,11 +75,11 @@ def store_vector(intent: str, vector: list, confidence: float, status: str, vari
         # Store in Qdrant
         client.upsert(collection_name=collection_name, points=[point])
 
-        print(f"✅ Stored vector in Qdrant ({collection_name}) → {payload}")
+        logger.info(f"Stored vector in Qdrant ({collection_name})", extra={"payload": payload})
         return True
 
     except Exception as e:
-        print(f"⚠️ Failed to store vector in Qdrant: {e}")
+        logger.error(f"Failed to store vector in Qdrant: {e}", exc_info=True)
         return False
 
 
@@ -91,11 +98,11 @@ def fetch_recent_records(limit: int = 5, collection_name: str = "chatnshop_produ
         result = client.scroll(collection_name=collection_name, limit=limit)
         points = result[0] if result else []
 
-        print(f"📊 Retrieved {len(points)} recent records:")
+        logger.info(f"Retrieved {len(points)} recent records from Qdrant")
         for p in points:
-            print(f"🧠 {p.payload}")
+            logger.debug(f"Record payload: {p.payload}")
         return points
 
     except Exception as e:
-        print(f"⚠️ Error fetching records from Qdrant: {e}")
+        logger.error(f"Error fetching records from Qdrant: {e}", exc_info=True)
         return []

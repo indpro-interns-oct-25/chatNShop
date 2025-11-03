@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
 from app.ai.llm_intent.request_handler import RequestHandler
 from app.ai.llm_intent.openai_client import OpenAIClient
 from app.schemas.llm_intent import LLMIntentRequest, LLMIntentResponse, LLMIntentSimpleRequest
+from app.core.auth import optional_auth, UserContext
 import logging
 
 
@@ -36,7 +37,10 @@ else:
 
 
 @router.post("/classify", response_model=LLMIntentResponse, summary="Direct LLM intent classification")
-async def classify_intent(request: LLMIntentRequest) -> LLMIntentResponse:
+async def classify_intent(
+    request: LLMIntentRequest,
+    current_user: UserContext = Depends(optional_auth)
+) -> LLMIntentResponse:
     """
     Direct LLM intent classification endpoint.
     

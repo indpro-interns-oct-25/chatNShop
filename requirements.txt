@@ -62,6 +62,12 @@ watchdog==4.0.1
 python-multipart==0.0.9
 
 # -----------------------------
+# Authentication & Security
+# -----------------------------
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# -----------------------------
 # Testing & Code Quality
 # -----------------------------
 pytest==8.3.3

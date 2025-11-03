@@ -38,11 +38,8 @@ except Exception:
     _OpenAIClient = None
     _LLMReq = None
 
-# --- RESILIENT CLIENT (NEW) ---
-try:
-    from app.core.resilient_openai_client import resilient_client
-except Exception:
-    resilient_client = None
+# Note: Real ResilientOpenAIClient is in app.ai.llm_intent.resilient_openai_client
+# and is used via RequestHandler for proper LLM calls
 
 # --- ALERT NOTIFIER (NEW ADDITION) ---
 try:
@@ -220,23 +217,11 @@ class DecisionEngine:
             logger.error(f"[{correlation_id}] Hybrid classification failed: {e} (latency: {total_latency:.2f}ms)", exc_info=True)
             traceback.print_exc()
 
-            # 🔄 LLM fallback (resilient)
-            if resilient_client:
-                try:
-                    llm_result = resilient_client.call(query)
-                    self._send_escalation_alert("LLM_FALLBACK_TRIGGERED", query)
-                    result = {
-                        "status": "FALLBACK_LLM",
-                        "intent": llm_result,
-                        "correlation_id": correlation_id,
-                    }
-                    self._cache[query] = result
-                    return result
-                except Exception as llm_e:
-                    logger.error(f"[{correlation_id}] LLM fallback failed: {llm_e}", exc_info=True)
-                    self._send_escalation_alert("LLM_FALLBACK_FAILURE", query)
+            # Note: LLM fallback should be handled via RequestHandler and queue system
+            # The stub resilient_client has been removed; proper LLM handling goes through
+            # app.ai.llm_intent.request_handler.RequestHandler which has full error handling
 
-            # 🧩 Last-good fallback if LLM unavailable
+            # 🧩 Last-good fallback
             fallback = {
                 "status": "FALLBACK_LAST_GOOD",
                 "intent": {
