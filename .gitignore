@@ -68,6 +68,10 @@ instance/
 # Scrapy stuff:
 .scrapy
 
+
+# Qdrant local database
+qdrant_storage/
+
 # Sphinx documentation
 docs/_build/
 
@@ -205,3 +209,32 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# CNS-12: Ambiguity resolver log files
+ambiguous_log.json
+# Configuration version backups - auto-generated
+config/versions/
+# Keep the directory but ignore the files
+config/versions/*.json
+
+
+logs/
+logs/*.jsonl
+
+# Runtime/generated data files
+data/*.db
+data/*.json
+data/
+
+# Redis persistence
+redis_data/
+
+# Test result files
+Results/
+Results/*.csv
+Results/*.json
+
+# A/B testing runtime event logs
+app/core/ab_testing/*.csv
+app/core/ab_testing/*.jsonl
+app/core/ab_testing/bandit_state.json

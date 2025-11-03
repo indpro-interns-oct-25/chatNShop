@@ -1,0 +1,28 @@
+{
+  "exp_001_compare_gpt4_vs_gpt4turbo": {
+    "variants": {
+      "baseline": {
+        "trials": 0,
+        "successes": 0
+      },
+      "variant_a": {
+        "trials": 0,
+        "successes": 0
+      }
+    },
+    "epsilon": 0.1
+  },
+  "exp_001_compare_embedding_vs_keyword": {
+    "variants": {
+      "keyword_matcher": {
+        "trials": 4,
+        "successes": 2
+      },
+      "embedding_matcher": {
+        "trials": 0,
+        "successes": 0
+      }
+    },
+    "epsilon": 0.1
+  }
+}
