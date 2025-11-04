@@ -23,9 +23,11 @@ load_dotenv()
 # -------------------------------------------------------------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+# Import logger for structured logging
+from loguru import logger
+
 if not OPENAI_API_KEY:
     # Only warn here — some flows run in DRY_RUN and don't require the key.
-    from loguru import logger
     logger.warning("OPENAI_API_KEY not found in environment. If DRY_RUN=false you must set it in .env")
 
 # Model names (fallback defaults provided)
@@ -108,9 +110,9 @@ def save_version(file_path):
         backup_filename = f"{name}_{timestamp}{ext}"
         backup_path = os.path.join(VERSIONS_DIR, backup_filename)
         shutil.copy(file_path, backup_path)
-        print(f"💾 Backup saved: {backup_filename}")
+        logger.info(f"💾 Backup saved: {backup_filename}")
     except Exception as e:
-        print(f"⚠️ Could not save backup for {file_path}: {e}")
+        logger.warning(f"⚠️ Could not save backup for {file_path}: {e}")
 
 
 def get_variant_filename(base_name, variant):
@@ -129,9 +131,9 @@ def load_all_configs():
 
     # Safe: if CONFIG_DIR doesn't exist, skip with a warning
     if not os.path.isdir(CONFIG_DIR):
-        print(f"⚠️  Config directory not found: {CONFIG_DIR} (skipping file-based configs)")
+        logger.warning(f"⚠️  Config directory not found: {CONFIG_DIR} (skipping file-based configs)")
     else:
-        print(f"🔄 Loading configuration variant: {ACTIVE_VARIANT}")
+        logger.info(f"🔄 Loading configuration variant: {ACTIVE_VARIANT}")
 
         # Load config files (e.g., rules.json, intents.json)
         for filename in os.listdir(CONFIG_DIR):
@@ -145,7 +147,7 @@ def load_all_configs():
                     CONFIG_CACHE[filename.replace(".json", "")] = data
 
     # Load keywords separately (optional)
-    print(f"🔄 Loading configuration variant: {ACTIVE_VARIANT}")
+    # Note: Variant loading message already logged above
     
     # Load rules and other config files from config/ directory
     for filename in os.listdir(CONFIG_DIR):
@@ -173,7 +175,7 @@ def load_all_configs():
         if keywords_data:
             CONFIG_CACHE["keywords"] = keywords_data
 
-    print("✅ Configurations loaded successfully.")
+    logger.info("✅ Configurations loaded successfully.")
 
 
 # -------------------------------------------------------------------
@@ -185,21 +187,21 @@ class ConfigChangeHandler(FileSystemEventHandler):
             return
         save_version(event.src_path)
         load_all_configs()
-        print(f"🔁 Config reloaded due to change: {event.src_path}")
+        logger.info(f"🔁 Config reloaded due to change: {event.src_path}")
 
 
 def start_config_watcher():
     """Watch config directory for JSON changes."""
     # If CONFIG_DIR not found, return None
     if not os.path.isdir(CONFIG_DIR):
-        print(f"👀 Config watcher not started: CONFIG_DIR does not exist ({CONFIG_DIR})")
+        logger.warning(f"👀 Config watcher not started: CONFIG_DIR does not exist ({CONFIG_DIR})")
         return None
 
     observer = Observer()
     handler = ConfigChangeHandler()
     observer.schedule(handler, CONFIG_DIR, recursive=False)
     observer.start()
-    print("👀 Watching config directory for changes...")
+    logger.info("👀 Watching config directory for changes...")
     return observer
 
 
@@ -210,11 +212,11 @@ def switch_variant(variant: str):
     """Switch configuration variant (A or B)."""
     global ACTIVE_VARIANT
     if variant.upper() not in ["A", "B"]:
-        print("❌ Invalid variant. Use 'A' or 'B'.")
+        logger.error("❌ Invalid variant. Use 'A' or 'B'.")
         return
 
     ACTIVE_VARIANT = variant.upper()
-    print(f"🔁 Switched to configuration variant: {ACTIVE_VARIANT}")
+    logger.info(f"🔁 Switched to configuration variant: {ACTIVE_VARIANT}")
     load_all_configs()
 
 

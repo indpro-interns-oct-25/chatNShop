@@ -3,6 +3,7 @@ Handles alerting when unusual cost spikes occur.
 """
 
 import logging
+from loguru import logger as loguru_logger
 
 class AlertManager:
     def __init__(self):
@@ -14,4 +15,4 @@ class AlertManager:
         Later: integrate email/Slack/webhook.
         """
         self.logger.warning(message)
-        print(f"\n🔔 ALERT: {message}\n")
+        loguru_logger.warning(f"ALERT: {message}")

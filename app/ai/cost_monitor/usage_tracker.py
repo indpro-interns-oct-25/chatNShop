@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 from threading import Lock
 from typing import Dict, Any, Optional
+from loguru import logger
 
 _lock = Lock()
 LOG_PATH = os.path.join("data", "usage_log.json")
@@ -37,7 +38,7 @@ class UsageTracker:
             self.spike_detector = CostSpikeDetector()
             self.alert_manager = AlertManager()
         except Exception as e:
-            print(f"[UsageTracker] Warning: optional components not loaded → {e}")
+            logger.warning(f"UsageTracker: optional components not loaded → {e}")
 
     # ------------------------------
     # File operations
@@ -100,7 +101,7 @@ class UsageTracker:
             from app.ai.cost_monitor.cost_alerts import check_and_alert
             check_and_alert()
         except Exception as e:
-            print(f"[UsageTracker] cost alert check failed → {e}")
+            logger.warning(f"UsageTracker: cost alert check failed → {e}")
 
         # ---- Spike detection ----
         try:
@@ -115,9 +116,9 @@ class UsageTracker:
                     if hasattr(self, "alert_manager"):
                         self.alert_manager.send_alert(msg)
                     else:
-                        print(f"⚠️ [Spike Alert] {msg}")
+                        logger.warning(f"Spike Alert: {msg}")
         except Exception as e:
-            print(f"[UsageTracker] spike detection failed → {e}")
+            logger.warning(f"UsageTracker: spike detection failed → {e}")
 
         return {
             "day": day_key,
@@ -143,7 +144,7 @@ class UsageTracker:
     # Summary helper
     # ------------------------------
     def summary(self):
-        """Prints a detailed cost summary for the current day and month."""
+        """Logs a detailed cost summary for the current day and month."""
         data = self._read()
         today = datetime.utcnow().strftime("%Y-%m-%d")
         month = datetime.utcnow().strftime("%Y-%m")
@@ -151,17 +152,15 @@ class UsageTracker:
         daily = data.get("daily", {}).get(today, {"tokens": 0, "cost": 0.0, "requests": 0})
         monthly = data.get("monthly", {}).get(month, {"tokens": 0, "cost": 0.0, "requests": 0})
 
-        print("\n📊 Cost Summary ----------------------------------")
-        print(f"Date: {today}")
-        print(f"Month: {month}")
-        print(f"Total Requests Today: {daily['requests']}")
-        print(f"Total Tokens Today: {daily['tokens']}")
-        print(f"Total Cost Today: ${daily['cost']:.6f}")
-        print("--------------------------------------------------")
-        print(f"Total Requests This Month: {monthly['requests']}")
-        print(f"Total Tokens This Month: {monthly['tokens']}")
-        print(f"Total Cost This Month: ${monthly['cost']:.6f}")
-        print("--------------------------------------------------\n")
+        logger.info("📊 Cost Summary")
+        logger.info(f"Date: {today}")
+        logger.info(f"Month: {month}")
+        logger.info(f"Total Requests Today: {daily['requests']}")
+        logger.info(f"Total Tokens Today: {daily['tokens']}")
+        logger.info(f"Total Cost Today: ${daily['cost']:.6f}")
+        logger.info(f"Total Requests This Month: {monthly['requests']}")
+        logger.info(f"Total Tokens This Month: {monthly['tokens']}")
+        logger.info(f"Total Cost This Month: ${monthly['cost']:.6f}")
 
     # ------------------------------
     # NEW: get_daily_summary (for scheduler)
@@ -184,7 +183,7 @@ class UsageTracker:
             }
 
         except Exception as e:
-            print(f"[UsageTracker] get_daily_summary failed → {e}")
+            logger.error(f"UsageTracker: get_daily_summary failed → {e}")
             return {
                 "date": datetime.utcnow().strftime("%Y-%m-%d"),
                 "total_tokens": 0,

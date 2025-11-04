@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Dict, Any, Optional, List
+from loguru import logger
 
 _lock = Lock()
 FEEDBACK_FILE = os.path.join("data", "feedback.jsonl")
@@ -49,7 +50,7 @@ class FeedbackStore:
                     if line:
                         records.append(json.loads(line))
         except Exception as e:
-            print(f"Error reading {filepath}: {e}")
+            logger.error(f"Error reading {filepath}: {e}")
         return records
 
     def record_feedback(

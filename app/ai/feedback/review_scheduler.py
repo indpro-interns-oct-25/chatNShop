@@ -84,7 +84,7 @@ def save_report(report: Dict[str, Any]) -> str:
 
 def weekly_review_job():
     """Weekly review job - generates and saves weekly report."""
-    print(f"[{datetime.now(timezone.utc).isoformat()}] Running weekly review...")
+    logger.info("Running weekly review...")
     try:
         # Record daily accuracy before generating report
         accuracy_tracker = AccuracyTracker()
@@ -92,30 +92,30 @@ def weekly_review_job():
         
         report = generate_review_report("weekly")
         filename = save_report(report)
-        print(f"[{datetime.now(timezone.utc).isoformat()}] Weekly report saved: {filename}")
-        print(f"  - Total misclassifications: {report['summary']['total_misclassifications']}")
-        print(f"  - Accuracy rate: {report['summary']['accuracy_rate']:.2%}")
+        logger.info(f"Weekly report saved: {filename}")
+        logger.info(f"  - Total misclassifications: {report['summary']['total_misclassifications']}")
+        logger.info(f"  - Accuracy rate: {report['summary']['accuracy_rate']:.2%}")
     except Exception as e:
-        print(f"[{datetime.now(timezone.utc).isoformat()}] Error in weekly review: {e}")
+        logger.error(f"Error in weekly review: {e}")
 
 
 def monthly_review_job():
     """Monthly review job - generates and saves monthly report."""
-    print(f"[{datetime.now(timezone.utc).isoformat()}] Running monthly review...")
+    logger.info("Running monthly review...")
     try:
         report = generate_review_report("monthly")
         filename = save_report(report)
-        print(f"[{datetime.now(timezone.utc).isoformat()}] Monthly report saved: {filename}")
-        print(f"  - Total misclassifications: {report['summary']['total_misclassifications']}")
-        print(f"  - Accuracy rate: {report['summary']['accuracy_rate']:.2%}")
+        logger.info(f"Monthly report saved: {filename}")
+        logger.info(f"  - Total misclassifications: {report['summary']['total_misclassifications']}")
+        logger.info(f"  - Accuracy rate: {report['summary']['accuracy_rate']:.2%}")
     except Exception as e:
-        print(f"[{datetime.now(timezone.utc).isoformat()}] Error in monthly review: {e}")
+        logger.error(f"Error in monthly review: {e}")
 
 
 def start_review_scheduler():
     """Start the background scheduler for review reports."""
     if not APSCHEDULER_AVAILABLE:
-        print("⚠️ APScheduler not available, review scheduler not started")
+        logger.warning("APScheduler not available, review scheduler not started")
         return None
     
     scheduler = BackgroundScheduler()
@@ -137,5 +137,5 @@ def start_review_scheduler():
     )
     
     scheduler.start()
-    print("✅ Review scheduler started (weekly: Mondays 9 AM, monthly: 1st of month 9 AM)")
+    logger.info("Review scheduler started (weekly: Mondays 9 AM, monthly: 1st of month 9 AM)")
     return scheduler

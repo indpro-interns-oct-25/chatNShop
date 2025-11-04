@@ -6,6 +6,7 @@ their metadata, and provides various methods for classification-related operatio
 """
 
 from typing import Dict, List, Optional, Any
+from loguru import logger
 from .models import IntentDefinition, IntentResult, ClassificationRequest, ClassificationResponse
 from .enums import IntentCategory, ActionCode, IntentPriority
 from .definitions import ALL_INTENT_DEFINITIONS
@@ -59,8 +60,8 @@ class IntentTaxonomy:
             # Find duplicates for warning message
             from collections import Counter
             duplicates = [code for code, count in Counter(action_codes).items() if count > 1]
-            print(f"⚠️  Warning: Some action codes are used by multiple intents: {duplicates[:5]}")
-            print(f"   This is allowed - multiple intents can map to the same action code.")
+            logger.warning(f"Some action codes are used by multiple intents: {duplicates[:5]}")
+            logger.debug("This is allowed - multiple intents can map to the same action code.")
 
     # --------------------------------------------------------------------------
     # Retrieval Methods

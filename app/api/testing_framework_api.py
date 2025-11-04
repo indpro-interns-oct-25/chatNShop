@@ -14,6 +14,7 @@ from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 from pathlib import Path
 import json
+from loguru import logger
 
 # Import testing framework components
 try:
@@ -23,7 +24,7 @@ try:
     from app.core.ab_testing_integration import get_unified_ab_manager
     TESTING_AVAILABLE = True
 except Exception as e:
-    print(f"⚠️ Testing framework not fully available: {e}")
+    logger.warning(f"Testing framework not fully available: {e}")
     TESTING_AVAILABLE = False
 
 
@@ -137,7 +138,7 @@ def list_experiments():
                     "config_file": config_file.name
                 })
             except Exception as e:
-                print(f"Error reading {config_file}: {e}")
+                logger.warning(f"Error reading {config_file}: {e}")
         
         return {"experiments": experiments, "count": len(experiments)}
         

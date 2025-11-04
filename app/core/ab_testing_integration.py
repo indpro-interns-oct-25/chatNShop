@@ -24,13 +24,14 @@ import os
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from pathlib import Path
+from loguru import logger
 
 # Import both systems
 try:
     from app.ai.cost_monitor.ab_testing import get_ab_test_manager, ExperimentResult as CostExperimentResult
     COST_SYSTEM_AVAILABLE = True
 except Exception as e:
-    print(f"⚠️ Cost monitoring A/B system not available: {e}")
+    logger.warning(f"Cost monitoring A/B system not available: {e}")
     COST_SYSTEM_AVAILABLE = False
 
 try:
@@ -39,7 +40,7 @@ try:
     from app.core.ab_testing.analysis import load_events, compute_variant_stats
     TESTING_SYSTEM_AVAILABLE = True
 except Exception as e:
-    print(f"⚠️ Testing framework not available: {e}")
+    logger.warning(f"Testing framework not available: {e}")
     TESTING_SYSTEM_AVAILABLE = False
 
 
@@ -62,16 +63,16 @@ class UnifiedABTestManager:
         if COST_SYSTEM_AVAILABLE:
             try:
                 self.cost_manager = get_ab_test_manager()
-                print("✅ Cost monitoring A/B system initialized")
+                logger.info("Cost monitoring A/B system initialized")
             except Exception as e:
-                print(f"⚠️ Failed to initialize cost manager: {e}")
+                logger.warning(f"Failed to initialize cost manager: {e}")
         
         if TESTING_SYSTEM_AVAILABLE:
             try:
                 self.bandit_controller = BanditController(experiment_id="unified_experiment")
-                print("✅ Testing framework initialized")
+                logger.info("Testing framework initialized")
             except Exception as e:
-                print(f"⚠️ Failed to initialize bandit controller: {e}")
+                logger.warning(f"Failed to initialize bandit controller: {e}")
         
         self.active_experiment_mapping = {}  # Map experiment IDs between systems
     
@@ -120,10 +121,10 @@ class UnifiedABTestManager:
                     description=description
                 )
                 
-                print(f"✅ Experiment created in cost monitoring system: cost_{experiment_id}")
+                logger.info(f"Experiment created in cost monitoring system: cost_{experiment_id}")
                 
             except Exception as e:
-                print(f"❌ Failed to create experiment in cost system: {e}")
+                logger.error(f"Failed to create experiment in cost system: {e}")
                 success = False
         
         # Create in testing framework
@@ -146,10 +147,10 @@ class UnifiedABTestManager:
                 with open(config_path, "w") as f:
                     json.dump(config, f, indent=2)
                 
-                print(f"✅ Experiment created in testing framework: {experiment_id}")
+                logger.info(f"Experiment created in testing framework: {experiment_id}")
                 
             except Exception as e:
-                print(f"❌ Failed to create experiment in testing system: {e}")
+                logger.error(f"Failed to create experiment in testing system: {e}")
                 success = False
         
         # Store mapping
@@ -212,7 +213,7 @@ class UnifiedABTestManager:
                 self.cost_manager.record_result(result)
                 
             except Exception as e:
-                print(f"⚠️ Failed to record result in cost system: {e}")
+                logger.warning(f"Failed to record result in cost system: {e}")
         
         # Record in testing framework
         if TESTING_SYSTEM_AVAILABLE:
@@ -249,7 +250,7 @@ class UnifiedABTestManager:
                     writer.writerow(event)
                 
             except Exception as e:
-                print(f"⚠️ Failed to record result in testing system: {e}")
+                logger.warning(f"Failed to record result in testing system: {e}")
     
     def get_unified_summary(self, experiment_id: str) -> Dict[str, Any]:
         """
@@ -271,7 +272,7 @@ class UnifiedABTestManager:
                 cost_id = self.active_experiment_mapping[experiment_id]["cost_id"]
                 summary["cost_monitoring"] = self.cost_manager.get_experiment_summary(cost_id)
             except Exception as e:
-                print(f"⚠️ Failed to get cost monitoring summary: {e}")
+                logger.warning(f"Failed to get cost monitoring summary: {e}")
         
         # Get testing framework summary
         if TESTING_SYSTEM_AVAILABLE:
@@ -285,7 +286,7 @@ class UnifiedABTestManager:
                         stats = compute_variant_stats(exp_events)
                         summary["testing_framework"] = stats.to_dict(orient="records")
             except Exception as e:
-                print(f"⚠️ Failed to get testing framework summary: {e}")
+                logger.warning(f"Failed to get testing framework summary: {e}")
         
         # Combine metrics
         if summary["cost_monitoring"] or summary["testing_framework"]:
@@ -295,7 +296,7 @@ class UnifiedABTestManager:
                     summary["testing_framework"]
                 )
             except Exception as e:
-                print(f"⚠️ Failed to combine metrics: {e}")
+                logger.warning(f"Failed to combine metrics: {e}")
         
         return summary
     

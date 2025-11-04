@@ -11,6 +11,7 @@ import time
 import numpy as np
 from sentence_transformers import SentenceTransformer, util
 from typing import List, Dict, Any
+from loguru import logger
 
 # --- FIXED IMPORTS ---
 from app.ai.intent_classification.keyword_matcher import match_keywords
@@ -38,7 +39,7 @@ class EmbeddingMatcher:
         :param model_name: Name of the sentence transformer model to use
         :param client: Optional vector database client (e.g., QdrantClient)
         """
-        print(f"🔄 Loading embedding model '{model_name}'...")
+        logger.info(f"Loading embedding model '{model_name}'...")
         start = time.time()
         
         self.model_name = model_name
@@ -51,7 +52,7 @@ class EmbeddingMatcher:
         self.intent_embeddings = self._precompute_embeddings()
         self._query_cache: Dict[str, Any] = {}
         self._query_cache_max = 512
-        print(f"✅ Model ready in {time.time() - start:.2f}s ({len(self.intent_examples)} intents)")
+        logger.info(f"Model ready in {time.time() - start:.2f}s ({len(self.intent_examples)} intents)")
 
     # ------------------------------------------------------------------
     def _load_reference_phrases(self) -> Dict[str, List[str]]:
@@ -76,11 +77,11 @@ class EmbeddingMatcher:
                     if clean_phrases:
                         refs[action_str] = list(set(clean_phrases))
                 if refs:
-                    print(f"🔗 Loaded {len(refs)} embedding references from definitions")
+                    logger.info(f"Loaded {len(refs)} embedding references from definitions")
                     return refs
             except Exception as e:
-                print(f"⚠️ Definition load failed: {e}")
-        print("⚠️ Using fallback INTENT_EXAMPLES for embeddings")
+                logger.warning(f"Definition load failed: {e}")
+        logger.warning("Using fallback INTENT_EXAMPLES for embeddings")
         return INTENT_EXAMPLES
 
     # ------------------------------------------------------------------
@@ -91,7 +92,7 @@ class EmbeddingMatcher:
             try:
                 embeddings[action_code] = self.model.encode(phrases, convert_to_tensor=True)
             except Exception as e:
-                print(f"⚠️ Embedding failure for {action_code}: {e}")
+                logger.warning(f"Embedding failure for {action_code}: {e}")
         return embeddings
 
     # ------------------------------------------------------------------
@@ -168,7 +169,7 @@ class EmbeddingMatcher:
                         query=clean_query,
                     )
                 except Exception as e:
-                    print(f"⚠️ Qdrant store failed: {e}")
+                    logger.warning(f"Qdrant store failed: {e}")
 
             return results
         except Exception as e:

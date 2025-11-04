@@ -34,6 +34,9 @@ class EnvironmentSettings(BaseSettings):
     gpt4_model: str = Field(default="gpt-4", env="GPT4_MODEL")
     gpt4_turbo_model: str = Field(default="gpt-4-turbo", env="GPT4_TURBO_MODEL")
     gpt35_model: str = Field(default="gpt-3.5-turbo", env="GPT35_MODEL")
+    openai_temperature: float = Field(default=0.3, env="OPENAI_TEMPERATURE", ge=0.0, le=2.0)
+    openai_max_tokens: int = Field(default=400, env="OPENAI_MAX_TOKENS", gt=0)
+    openai_timeout_secs: float = Field(default=30.0, env="OPENAI_TIMEOUT_SECS", gt=0.0)
     dry_run: bool = Field(default=True, env="DRY_RUN")
     
     # Redis Configuration (Optional - has defaults for local dev)
@@ -41,6 +44,7 @@ class EnvironmentSettings(BaseSettings):
     redis_host: Optional[str] = Field(default=None, env="REDIS_HOST")
     redis_port: int = Field(default=6379, env="REDIS_PORT", gt=0, le=65535)
     redis_password: Optional[str] = Field(default=None, env="REDIS_PASSWORD")
+    redis_db: int = Field(default=0, env="REDIS_DB", ge=0)
     redis_max_connections: int = Field(default=50, env="REDIS_MAX_CONNECTIONS", gt=0)
     
     # Qdrant Configuration (Optional - has defaults for local dev)
@@ -63,6 +67,30 @@ class EnvironmentSettings(BaseSettings):
     rate_limit_ip_per_day: int = Field(default=10000, env="RATE_LIMIT_IP_PER_DAY", gt=0)
     rate_limit_user_per_minute: int = Field(default=1000, env="RATE_LIMIT_USER_PER_MINUTE", gt=0)
     rate_limit_user_per_day: int = Field(default=100000, env="RATE_LIMIT_USER_PER_DAY", gt=0)
+    
+    # Application Environment
+    environment: str = Field(default="production", env="ENVIRONMENT")
+    
+    # LLM Cache Configuration
+    enable_llm_cache: bool = Field(default=True, env="ENABLE_LLM_CACHE")
+    llm_cache_similarity_threshold: float = Field(default=0.95, env="LLM_CACHE_SIMILARITY_THRESHOLD", ge=0.0, le=1.0)
+    llm_cache_ttl: int = Field(default=86400, env="LLM_CACHE_TTL", gt=0)  # 24 hours in seconds
+    llm_cache_max_size: int = Field(default=10000, env="LLM_CACHE_MAX_SIZE", gt=0)
+    llm_cache_min_query_length: int = Field(default=3, env="LLM_CACHE_MIN_QUERY_LENGTH", ge=0)
+    
+    # Session Context Configuration
+    enable_session_context: bool = Field(default=True, env="ENABLE_SESSION_CONTEXT")
+    context_token_limit: int = Field(default=2000, env="CONTEXT_TOKEN_LIMIT", gt=0)
+    context_history_limit: int = Field(default=5, env="CONTEXT_HISTORY_LIMIT", gt=0)
+    
+    # LLM Queue Configuration
+    enable_llm_queue: bool = Field(default=True, env="ENABLE_LLM_QUEUE")
+    
+    # Cost Monitoring & Alerting Configuration
+    cost_alert_daily_threshold_usd: float = Field(default=2.0, env="COST_ALERT_DAILY_THRESHOLD_USD", ge=0.0)
+    accuracy_drop_threshold: float = Field(default=0.05, env="ACCURACY_DROP_THRESHOLD", ge=0.0, le=1.0)
+    latency_spike_threshold_ms: float = Field(default=3000.0, env="LATENCY_SPIKE_THRESHOLD_MS", gt=0.0)
+    error_rate_spike_threshold: float = Field(default=0.05, env="ERROR_RATE_SPIKE_THRESHOLD", ge=0.0, le=1.0)
     
     @field_validator("log_level")
     @classmethod
@@ -144,6 +172,7 @@ class EnvironmentSettings(BaseSettings):
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
+        "extra": "ignore",  # Ignore extra environment variables not defined in the model
     }
 
 

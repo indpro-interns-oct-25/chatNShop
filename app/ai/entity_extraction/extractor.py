@@ -15,28 +15,47 @@ class EntityExtractor:
 
         text_lower = text.lower()
 
-        # --- Brand extraction ---
+        # --- Brand extraction (whole word matching to avoid substring issues) ---
         brand = None
         known_brands = ["nike", "adidas", "puma", "reebok", "apple", "samsung"]
         for b in known_brands:
-            if b in text_lower:
+            # Use word boundary regex to match whole words only
+            if re.search(r'\b' + re.escape(b) + r'\b', text_lower):
                 brand = b
                 break
 
-        # --- Color extraction ---
+        # --- Color extraction (whole word matching to avoid substring issues like "red" in "ordered") ---
         color = None
-        known_colors = ["red", "blue", "black", "white", "green", "yellow"]
+        known_colors = ["red", "blue", "black", "white", "green", "yellow", "orange", "purple", "pink", "brown", "gray", "grey"]
         for c in known_colors:
-            if c in text_lower:
-                color = c
+            # Use word boundary regex to match whole words only
+            if re.search(r'\b' + re.escape(c) + r'\b', text_lower):
+                # Normalize "grey" to "gray" for consistency
+                color = "gray" if c == "grey" else c
                 break
 
-        # --- Product name / category ---
+        # --- Product name / category (whole word matching) ---
         product_name = None
-        known_products = ["shoes", "phone", "t-shirt", "watch", "laptop"]
+        known_products = ["shoes", "phone", "t-shirt", "watch", "laptop", "shirt", "jeans", "bag"]
         for p in known_products:
-            if p in text_lower:
+            # Use word boundary regex to match whole words only
+            # For hyphenated words like "t-shirt", use a more flexible pattern
+            if "-" in p:
+                # For hyphenated words, match with word boundaries or hyphens
+                pattern = r'(?<![a-z])' + re.escape(p) + r'(?![a-z])'
+            else:
+                pattern = r'\b' + re.escape(p) + r'\b'
+            if re.search(pattern, text_lower):
                 product_name = p
+                break
+
+        # --- Category extraction (whole word matching) ---
+        category = None
+        known_categories = ["running", "casual", "sports", "formal", "electronics", "fashion", "footwear", "accessories"]
+        for cat in known_categories:
+            # Use word boundary regex to match whole words only
+            if re.search(r'\b' + re.escape(cat) + r'\b', text_lower):
+                category = cat
                 break
 
         # --- Size extraction ---
@@ -69,7 +88,7 @@ class EntityExtractor:
             "color": color,
             "size": size,
             "price_range": price_range,
-            "category": None
+            "category": category
         }
 
         logger.info(f"🎯 Extracted Entities: {entities} (from: {text})")

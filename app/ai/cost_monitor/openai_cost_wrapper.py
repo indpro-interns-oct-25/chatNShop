@@ -9,6 +9,7 @@ Wrapper layer for OpenAIClient that adds:
 
 import time
 from typing import Any, Dict
+from loguru import logger
 from app.ai.llm_intent.openai_client import OpenAIClient
 from app.ai.cost_monitor.usage_tracker import UsageTracker
 from app.ai.cost_monitor.rate_limiter import RateLimiter
@@ -61,7 +62,7 @@ class CostAwareOpenAIClient:
         latency_ms = (time.time() - start_time) * 1000
 
         if not response or "error" in response:
-            print(f"❌ LLM request failed or returned error: {response.get('error') if response else 'unknown'}")
+            logger.error(f"LLM request failed or returned error: {response.get('error') if response else 'unknown'}")
             return response
 
         # Extract usage info
@@ -83,6 +84,6 @@ class CostAwareOpenAIClient:
         )
 
         if cost > MAX_REQUEST_COST_USD:
-            print(f"⚠️ High cost alert: ${cost:.4f} > ${MAX_REQUEST_COST_USD:.4f} per request limit")
+            logger.warning(f"High cost alert: ${cost:.4f} > ${MAX_REQUEST_COST_USD:.4f} per request limit")
 
         return response

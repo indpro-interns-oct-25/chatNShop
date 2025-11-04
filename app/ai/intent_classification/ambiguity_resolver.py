@@ -153,8 +153,8 @@ def find_matched_keywords_for_action(user_input_lower: str, keywords: List[str])
 
 def fallback_behavior(user_input):
     """Handle unclear or low-confidence user inputs."""
-    print(f"[Fallback] Input unclear or low confidence: '{user_input}'")
-    print("Sending this input to LLM or asking user for clarification...")
+    logger.warning(f"Fallback: Input unclear or low confidence: '{user_input}'")
+    logger.info("Sending this input to LLM or asking user for clarification...")
 
 
 def detect_intent(user_input: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

@@ -1,5 +1,6 @@
 # app/ai/cost_monitor/scheduler.py
 import logging
+from loguru import logger
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 from app.ai.cost_monitor.usage_tracker import UsageTracker
@@ -9,8 +10,7 @@ from app.ai.cost_monitor.alert_manager import AlertManager
 
 def run_spike_check():
     """Performs periodic cost spike detection and sends alerts if anomalies are found."""
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] Running automatic cost spike check...")
+    logger.info("Running automatic cost spike check...")
 
     try:
         usage = UsageTracker()
@@ -25,12 +25,12 @@ def run_spike_check():
 
         if spike_detected:
             alert.send_alert("⚠️ Cost Spike Detected", report)
-            print(f"[{timestamp}] [ALERT] Spike detected and notification sent.")
+            logger.warning("Spike detected and notification sent.")
         else:
-            print(f"[{timestamp}] [INFO] No spike detected today.")
+            logger.debug("No spike detected today.")
 
     except Exception as e:
-        print(f"[{timestamp}] [ERROR] Spike check failed: {e}")
+        logger.error(f"Spike check failed: {e}")
         logging.exception("Spike check failed.")
 
 
@@ -43,11 +43,11 @@ def start_scheduler():
         scheduler.start()
 
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        print(f"[SCHEDULER] Started automatic cost spike monitoring at {now} (runs every 6 hours).")
+        logger.info(f"Started automatic cost spike monitoring at {now} (runs every 6 hours).")
         logging.info(f"[SCHEDULER] Automatic cost spike monitoring started at {now}")
 
     except Exception as e:
-        print(f"[SCHEDULER ERROR] Failed to start scheduler: {e}")
+        logger.error(f"Failed to start scheduler: {e}")
         logging.exception("Failed to start scheduler.")
 if __name__ == "__main__":
     print("🔁 Manual Scheduler Test — starting for 3 minutes...")

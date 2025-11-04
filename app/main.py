@@ -428,7 +428,7 @@ async def liveness_check() -> Dict[str, Any]:
 
 # Classification Models
 class ClassificationInput(BaseModel):
-    text: str
+    text: str = Field(..., max_length=10000, description="User input text (max 10,000 characters)")
 
 
 class ClassificationOutput(BaseModel):

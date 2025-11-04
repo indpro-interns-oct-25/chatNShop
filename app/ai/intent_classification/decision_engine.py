@@ -48,8 +48,7 @@ except Exception:
     send_alert = None
 
 # --- LOGGER ---
-logger = logging.getLogger("decision_engine")
-logger.setLevel(logging.INFO)
+from loguru import logger
 
 # --- TEXT NORMALIZER ---
 def _clean_text(query: str) -> str:
@@ -65,13 +64,13 @@ class DecisionEngine:
     """Orchestrates hybrid search with resilience, caching, and escalation."""
 
     def __init__(self):
-        print("Initializing DecisionEngine...")
+        logger.info("Initializing DecisionEngine...")
         self.keyword_matcher = KeywordMatcher()
         self.embedding_matcher = None
         self.hybrid_classifier = HybridClassifier()
         self._cache: Dict[str, Dict[str, Any]] = {}  # ✅ Local read-through cache
         self._load_config_from_manager()
-        print(f"✅ DecisionEngine Initialized: variant={ACTIVE_VARIANT}")
+        logger.info(f"✅ DecisionEngine Initialized: variant={ACTIVE_VARIANT}")
 
     # ------------------------------------------------------------------
     def _load_config_from_manager(self):
@@ -89,12 +88,12 @@ class DecisionEngine:
                 self.emb_weight = current_rules.get("emb_weight", WEIGHTS.get("embedding", 0.4))
                 self.priority_threshold = current_rules.get("priority_threshold", PRIORITY_THRESHOLD)
                 self.hybrid_classifier.update_weights(self.kw_weight, self.emb_weight)
-                print(f"📋 Using dynamic rules for {ACTIVE_VARIANT}")
+                logger.info(f"📋 Using dynamic rules for {ACTIVE_VARIANT}")
             else:
                 raise KeyError("Missing dynamic config")
 
         except Exception as e:
-            print(f"⚠️ Config manager error: {e} — Using fallback from app/ai/config.py")
+            logger.warning(f"⚠️ Config manager error: {e} — Using fallback from app/ai/config.py")
             # Use centralized fallback values from app/ai/config.py
             self.use_embedding = True
             self.use_keywords = True
@@ -192,11 +191,20 @@ class DecisionEngine:
                     logger.info(f"[{correlation_id}] Handoff: rule-based → LLM queue (latency: {rule_based_latency:.2f}ms)")
                     # Handoff logging will be done by queue worker
                 elif "CONFIDENT" in source:
+                    # Get entities and match info from result
+                    entities = result.get("entities")
+                    intent_obj = result.get("intent", {})
+                    match_type = intent_obj.get("match_type")
+                    matched_text = intent_obj.get("matched_text")
+                    
                     classification_logger.log_rule_based_classification(
                         query=query,
                         action_code=action_code,
                         confidence=confidence,
                         request_id=correlation_id,
+                        entities=entities,
+                        match_type=match_type,
+                        matched_text=matched_text,
                     )
                     intent_tracker.record_intent(action_code)
                     confidence_tracker.record_confidence(confidence)
@@ -248,10 +256,57 @@ class DecisionEngine:
             keyword_results = self.keyword_matcher.search(query)
             if keyword_results and keyword_results[0]["score"] >= self.priority_threshold:
                 logger.info(f"✅ High-confidence keyword match: {keyword_results[0]['id']}")
+                
+                # Extract entities for keyword-based results
+                entities = None
+                try:
+                    from app.ai.entity_extraction.extractor import EntityExtractor
+                    extractor = EntityExtractor()
+                    entities = extractor.extract_entities(query)
+                    # Convert to proper format (product_name -> product_type, capitalize brand, etc.)
+                    if entities:
+                        # Map product_name to product_type for consistency
+                        if "product_name" in entities and entities["product_name"]:
+                            entities["product_type"] = entities.pop("product_name")
+                        
+                        # Capitalize brand name (e.g., "nike" -> "Nike")
+                        if "brand" in entities and entities["brand"]:
+                            entities["brand"] = entities["brand"].capitalize()
+                        
+                        # Ensure price_range is in correct format if present
+                        if "price_range" in entities:
+                            if isinstance(entities["price_range"], dict):
+                                # Already in correct format, ensure currency is set if price found
+                                if (entities["price_range"].get("max") or entities["price_range"].get("min")) and not entities["price_range"].get("currency"):
+                                    entities["price_range"]["currency"] = "USD" if "$" in query else "INR"
+                            elif isinstance(entities["price_range"], str):
+                                # Convert string format to dict if needed
+                                price_str = entities["price_range"]
+                                if "-" in price_str:
+                                    parts = price_str.split("-")
+                                    entities["price_range"] = {
+                                        "min": int(parts[0]) if parts[0] else None,
+                                        "max": int(parts[1]) if len(parts) > 1 and parts[1] else None,
+                                        "currency": "USD" if "$" in query else "INR"
+                                    }
+                        
+                        # Remove None values to clean up the response, but keep price_range dict even if min/max are None
+                        price_range_backup = entities.get("price_range")
+                        entities = {k: v for k, v in entities.items() if v is not None}
+                        # Restore price_range if it was a dict (even with None values, it's still useful)
+                        if price_range_backup and isinstance(price_range_backup, dict):
+                            entities["price_range"] = price_range_backup
+                        
+                        logger.debug(f"Extracted entities for keyword match: {entities}")
+                except Exception as e:
+                    logger.warning(f"Failed to extract entities for keyword match: {e}")
+                    entities = None
+                
                 return {
                     "status": "CONFIDENT_KEYWORD",
                     "intent": keyword_results[0],
                     "config_variant": ACTIVE_VARIANT,
+                    "entities": entities,
                 }
 
         if self.use_embedding:
@@ -296,7 +351,22 @@ class DecisionEngine:
                 from app.ai.intent_classification.ambiguity_resolver import detect_intent
 
                 ambiguity_result = detect_intent(query)
-                if ambiguity_result.get("action") in ["AMBIGUOUS", "UNCLEAR"]:
+                action = ambiguity_result.get("action")
+                
+                # Send to queue if:
+                # 1. Explicitly AMBIGUOUS or UNCLEAR, OR
+                # 2. Low confidence (< 0.6) from rule-based matching (needs LLM processing), OR
+                # 3. We're in fallback mode (this path means rule-based wasn't confident enough)
+                confidence = ambiguity_result.get("confidence", 0.0)
+                blended_score = blended_results[0].get("score", 0.0) if blended_results else 0.0
+                should_queue = (
+                    action in ["AMBIGUOUS", "UNCLEAR"] or
+                    confidence < 0.6 or
+                    blended_score < 0.6 or
+                    not blended_results  # No matches at all - definitely needs LLM
+                )
+                
+                if should_queue:
                     message_id = send_to_llm_queue(
                         query=query,
                         ambiguity_result=ambiguity_result,
@@ -304,7 +374,7 @@ class DecisionEngine:
                         is_premium=False,
                     )
                     if message_id:
-                        logger.info(f"✅ Sent ambiguous query to queue: {message_id}")
+                        logger.info(f"✅ Sent query to LLM queue: {message_id} (action={action}, confidence={confidence})")
                         return {
                             "status": "QUEUED_FOR_LLM",
                             "intent": {
@@ -317,8 +387,12 @@ class DecisionEngine:
                             "message": "Query sent to LLM queue for processing",
                             "config_variant": ACTIVE_VARIANT,
                         }
+                    else:
+                        logger.warning("⚠ Queue returned None message_id, falling back to sync LLM")
+                else:
+                    logger.info(f"⏭ Skipping queue for high-confidence action: {action} (confidence={confidence})")
             except Exception as e:
-                logger.warning(f"⚠ Queue integration error: {e}. Falling back to sync LLM processing.")
+                logger.warning(f"⚠ Queue integration error: {e}. Falling back to sync LLM processing.", exc_info=True)
 
         # Fallback: Sync LLM call
         if _LLMHandler and _LLMReq and _OpenAIClient:

@@ -17,6 +17,7 @@ from typing import Dict, Any, Optional, List
 from threading import Lock
 from dataclasses import dataclass, asdict
 from enum import Enum
+from loguru import logger
 
 
 # Database for experiment tracking
@@ -190,12 +191,12 @@ class ABTestManager:
                 # Load into memory
                 self.active_experiments[experiment_id] = variants
                 
-                print(f"✅ Experiment '{name}' created with {len(variants)} variants")
+                logger.info(f"Experiment '{name}' created with {len(variants)} variants")
                 return True
                 
             except Exception as e:
                 conn.rollback()
-                print(f"❌ Failed to create experiment: {e}")
+                logger.error(f"Failed to create experiment: {e}")
                 return False
             finally:
                 conn.close()
@@ -267,7 +268,7 @@ class ABTestManager:
                 
             except Exception as e:
                 conn.rollback()
-                print(f"❌ Failed to record result: {e}")
+                logger.error(f"Failed to record result: {e}")
             finally:
                 conn.close()
     
@@ -366,7 +367,7 @@ class ABTestManager:
             if experiment_id in self.active_experiments:
                 del self.active_experiments[experiment_id]
             
-            print(f"🛑 Experiment '{experiment_id}' stopped")
+            logger.info(f"Experiment '{experiment_id}' stopped")
     
     def _load_active_experiments(self):
         """Load active experiments from database into memory"""

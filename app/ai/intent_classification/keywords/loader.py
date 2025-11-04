@@ -1,5 +1,6 @@
 import os
 import json
+from loguru import logger
 
 def load_all_keywords(keywords_dir=None):
     """
@@ -26,9 +27,9 @@ def load_all_keywords(keywords_dir=None):
                     if isinstance(data, dict):
                         all_keywords.update(data)
                     else:
-                        print(f"⚠️ Skipping invalid JSON file: {file_name} (Expected dict, got {type(data)})")
+                        logger.warning(f"Skipping invalid JSON file: {file_name} (Expected dict, got {type(data)})")
             except Exception as e:
-                print(f"⚠️ Skipping invalid JSON file: {file_name} ({e})")
+                logger.warning(f"Skipping invalid JSON file: {file_name} ({e})")
 
     return all_keywords
 

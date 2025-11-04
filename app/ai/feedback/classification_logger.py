@@ -90,6 +90,35 @@ class ClassificationLogger:
             metadata=metadata,
         )
 
+    def log_rule_based_classification(
+        self,
+        query: str,
+        action_code: str,
+        confidence: float,
+        request_id: Optional[str] = None,
+        entities: Optional[Dict[str, Any]] = None,
+        match_type: Optional[str] = None,
+        matched_text: Optional[str] = None,
+        **kwargs
+    ) -> None:
+        """Log a rule-based (keyword/embedding) classification."""
+        metadata = {
+            "match_type": match_type,
+            "matched_text": matched_text,
+            "entities": entities,
+            **kwargs
+        }
+        
+        self.log_classification(
+            query=query,
+            action_code=action_code,
+            confidence=confidence,
+            source="keyword",
+            request_id=request_id,
+            context={},
+            metadata=metadata,
+        )
+
 
 _classification_logger_instance: Optional[ClassificationLogger] = None
 

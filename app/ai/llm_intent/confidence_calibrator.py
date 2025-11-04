@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Optional, Set
 import json
 from pathlib import Path
+from loguru import logger
 
 # ---------------------------------------------------------------------------
 # Prompt versioning & schema validation
@@ -99,15 +100,15 @@ def should_trigger_llm(ctx: TriggerContext) -> tuple[bool, str]:
 if __name__ == "__main__":
     prompt_path = Path(__file__).parent / "prompts" / f"few_shot_examples_{PROMPT_VERSION}.json"
     if not prompt_path.exists():
-        print(f"⚠️  Prompt file not found at: {prompt_path}")
+        logger.warning(f"Prompt file not found at: {prompt_path}")
     else:
         data = json.load(open(prompt_path, "r", encoding="utf-8"))
         try:
             validate_prompt_schema(data)
-            print(f"✅ Schema validation passed for {prompt_path.name} ({len(data)} examples)")
-            print(f"🧠 Prompt version: {PROMPT_VERSION}")
+            logger.info(f"Schema validation passed for {prompt_path.name} ({len(data)} examples)")
+            logger.info(f"Prompt version: {PROMPT_VERSION}")
         except ValueError as e:
-            print(f"❌ Schema validation failed: {e}")
+            logger.error(f"Schema validation failed: {e}")
 
 
 __all__ = [

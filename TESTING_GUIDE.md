@@ -73,8 +73,11 @@ Before starting, ensure:
     "openai": "configured"
   },
   "queue": {
+    "status": "available",
     "ambiguous_queue_size": 0,
-    "result_queue_size": 0
+    "result_queue_size": 0,
+    "dead_letter_queue_size": 0,
+    "timestamp": "2025-11-XX..."
   },
   "version": "1.0.0"
 }
@@ -152,14 +155,18 @@ Before starting, ensure:
 ```json
 {
   "action_code": "ADD_TO_CART",
-  "confidence_score": 0.95,
+  "confidence_score": 1,
   "matched_keywords": ["add to cart"],
   "original_text": "add to cart",
   "status": "CONFIDENT_KEYWORD",
   "intent": {
     "id": "ADD_TO_CART",
-    "score": 0.95,
-    "source": "keyword"
+    "intent": "ADD_TO_CART",
+    "action": "ADD_TO_CART",
+    "score": 1,
+    "source": "keyword",
+    "match_type": "exact",
+    "matched_text": "add to cart"
   },
   "entities": null
 }
@@ -193,8 +200,12 @@ Before starting, ensure:
   "status": "LLM_CLASSIFICATION",
   "intent": {
     "id": "SEARCH_PRODUCT",
+    "intent": "SEARCH_PRODUCT",
+    "action": "SEARCH_PRODUCT",
     "score": 0.88,
-    "source": "llm"
+    "source": "llm",
+    "match_type": "partial",
+    "matched_text": "show me"
   },
   "entities": {
     "product_type": "shoes",
@@ -230,7 +241,7 @@ Before starting, ensure:
 **Expected Response:**
 ```json
 {
-  "action_code": "RETURN_ORDER",
+  "action_code": "INITIATE_RETURN",
   "confidence_score": 0.85,
   "original_text": "I want to return the blue shirt I ordered last week",
   "status": "LLM_CLASSIFICATION",
