@@ -1,7 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import httpx
 import os
+from loguru import logger
+
+from app.config import Settings, build_pg_dsn
+from app.db.postgres import init_pool, close_pool
+from app.llm_connectors.shopify_client import ShopifyClient
 
 # -----------------------------------------------------------------------------
 # FASTAPI APP CONFIGURATION
@@ -11,6 +16,46 @@ app = FastAPI(
     description="Routes user input → Intent Classifier → Appropriate Backend",
     version="1.0.0"
 )
+
+
+# -----------------------------------------------------------------------------
+# STARTUP / SHUTDOWN
+# -----------------------------------------------------------------------------
+@app.on_event("startup")
+async def on_startup() -> None:
+    settings = Settings()
+    app.state.settings = settings
+
+    # Init Postgres (best-effort)
+    dsn = build_pg_dsn(settings)
+    if dsn:
+        await init_pool(dsn)
+    else:
+        logger.warning("No PostgreSQL DSN configured, Shopify logs will use JSONL fallback")
+
+    # Init Shopify client (if configured)
+    if settings.shopify_shop_domain and settings.shopify_access_token:
+        app.state.shopify_client = ShopifyClient(
+            shop_domain=settings.shopify_shop_domain,
+            access_token=settings.shopify_access_token,
+            api_version=settings.shopify_api_version,
+            timeout_seconds=settings.shopify_timeout_seconds,
+            log_response_bodies=settings.shopify_log_response_bodies,
+        )
+        logger.info("Shopify client initialized")
+    else:
+        app.state.shopify_client = None
+        logger.warning("Shopify credentials not configured; Shopify calls are disabled")
+
+
+@app.on_event("shutdown")
+async def on_shutdown() -> None:
+    # Close Shopify client
+    client: ShopifyClient | None = getattr(app.state, "shopify_client", None)
+    if client:
+        await client.aclose()
+    # Close PG pool
+    await close_pool()
 
 # -----------------------------------------------------------------------------
 # SERVICE URL CONFIGURATION
@@ -122,3 +167,22 @@ async def root():
         "service": "Orchestrator API",
         "message": "The Orchestrator is running and ready to route requests."
     }
+
+
+# -----------------------------------------------------------------------------
+# DEBUG: Basic Shopify ping to verify logging
+# -----------------------------------------------------------------------------
+@app.get("/debug/shopify/ping")
+async def shopify_ping(request: Request):
+    client: ShopifyClient | None = getattr(app.state, "shopify_client", None)
+    if not client:
+        raise HTTPException(status_code=503, detail="Shopify client not configured")
+    # GET shop info as a lightweight call
+    path = f"/admin/api/{app.state.settings.shopify_api_version}/shop.json"
+    try:
+        resp = await client.get(path)
+        data = resp.json()
+        return {"status": "ok", "shop": data.get("shop", {}).get("name")}
+    except Exception as e:
+        # Still logged with timestamps by the client
+        raise HTTPException(status_code=502, detail=f"Shopify ping failed: {str(e)}")
